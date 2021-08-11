@@ -109,6 +109,8 @@ public:
     // or plugin.
     static void addEventsToMidiBuffer (const Vst2::VstEvents* events, MidiBuffer& dest)
     {
+    	std::vector<uint8_t> tempSysexData;
+    	
         for (int i = 0; i < events->numEvents; ++i)
         {
             const Vst2::VstEvent* const e = events->events[i];
@@ -125,9 +127,38 @@ public:
                 else if (e->type == Vst2::kVstSysExType)
                 {
                     const auto* se = (const Vst2::VstMidiSysexEvent*) ptr;
-                    dest.addEvent ((const juce::uint8*) se->sysexDump,
-                                   (int) se->dumpBytes,
-                                   e->deltaFrames);
+
+                	const auto data = (const juce::uint8*) se->sysexDump;
+                	const auto len = (int) se->dumpBytes;
+
+                	if(len < 1)
+						continue;
+
+                	const bool validBegin = data[0] == 0xf0;
+                	const bool validEnd   = data[len-1] == 0xf7;
+                	const bool isComplete = validBegin && validEnd;
+
+                	if(isComplete)
+                	{
+   	                    dest.addEvent (data, len, e->deltaFrames);
+                	}
+					else
+					{
+						tempSysexData.reserve(2048);
+
+						if(validBegin)
+							tempSysexData.clear();
+
+						const size_t oldLen = tempSysexData.size();
+						tempSysexData.resize(oldLen + len);
+						memcpy(&tempSysexData[oldLen], data, len);
+
+						if(validEnd)
+						{
+	   	                    dest.addEvent (&tempSysexData[0], (int)tempSysexData.size(), e->deltaFrames);
+							tempSysexData.clear();
+						}
+					}
                 }
             }
         }
