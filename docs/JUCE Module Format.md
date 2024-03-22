@@ -17,7 +17,7 @@ JUCE convention for naming modules is lower-case with underscores, e.g.
     juce_events
     juce_graphics
 
-But any name that is a valid C++ identifer is OK.
+But any name that is a valid C++ identifier is OK.
 
 Inside the root of this folder, there must be a set of public header and source files which
 the user's' project will include. The module may have as many other internal source files as
@@ -99,8 +99,11 @@ windowsLibs, linuxLibs and mingwLibs keywords in the module declaration (see the
 section).
 
 - OS X
-  - libs/MacOSX/{arch}, where {arch} is the architecture you are targeting in Xcode ("x86_64" or
-    "i386", for example).
+  - libs/MacOSX - to support multiple architectures, you may place libraries built as universal
+    binaries at this location. For backwards compatibility, the Projucer will also include the
+    directories libs/MacOSX/{arch}, where {arch} is the architecture you are targeting in Xcode
+    ("x86_64" or "i386", for example). When building with CMake, only libraries built as universal
+    binaries are supported and the arch subfolders are ignored.
 
 - Visual Studio
   - libs/VisualStudio{year}/{arch}/{run-time}, where {year} is the four digit year of the Visual Studio
@@ -116,8 +119,11 @@ section).
   - libs/MinGW/{arch}, where {arch} can take the same values as Linux.
 
 - iOS
-  - libs/iOS/{arch}, where {arch} is the architecture you are targeting in Xcode ("arm64" or
-    "x86_64", for example).
+  - libs/iOS - to support multiple architectures, you may place libraries built as universal
+    binaries at this location. For backwards compatibility, the Projucer will also include the
+    directories libs/iOS/{arch}, where {arch} is the architecture you are targeting in Xcode
+    ("arm64" or "x86_64", for example). When building with CMake, only libraries built as universal
+    binaries are supported and the arch subfolders are ignored.
 
 - Android
   - libs/Android/{arch}, where {arch} is the architecture provided by the Android Studio variable

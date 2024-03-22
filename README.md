@@ -1,12 +1,11 @@
 ![alt text](https://assets.juce.com/juce/JUCE_banner_github.png "JUCE")
 
-JUCE is an open-source cross-platform C++ application framework used for rapidly
-developing high quality desktop and mobile applications, including VST, AU (and AUv3),
-RTAS and AAX audio plug-ins. JUCE can be easily integrated with existing projects or can
-be used as a project generation tool via the [Projucer](https://juce.com/discover/projucer),
-which supports exporting projects for Xcode (macOS and iOS), Visual Studio, Android Studio,
-Code::Blocks, CLion and Linux Makefiles as well as containing a source code editor and
-live-coding engine which can be used for rapid prototyping.
+JUCE is an open-source cross-platform C++ application framework for creating high quality
+desktop and mobile applications, including VST, VST3, AU, AUv3, RTAS and AAX audio plug-ins.
+JUCE can be easily integrated with existing projects via CMake, or can be used as a project
+generation tool via the [Projucer](https://juce.com/discover/projucer), which supports
+exporting projects for Xcode (macOS and iOS), Visual Studio, Android Studio, Code::Blocks
+and Linux Makefiles as well as containing a source code editor.
 
 ## Getting Started
 
@@ -25,7 +24,7 @@ tool) or with CMake.
 The repository doesn't contain a pre-built Projucer so you will need to build it
 for your platform - Xcode, Visual Studio and Linux Makefile projects are located in
 [extras/Projucer/Builds](/extras/Projucer/Builds)
-(the minumum system requirements are listed in the __System Requirements__ section below).
+(the minimum system requirements are listed in the __System Requirements__ section below).
 The Projucer can then be used to create new JUCE projects, view tutorials and run examples.
 It is also possible to include the JUCE modules source code in an existing project directly,
 or build them into a static or dynamic library which can be linked into a project.
@@ -36,13 +35,12 @@ For further help getting started, please refer to the JUCE
 
 ### CMake
 
-Version 3.15 or higher is required for plugin projects, and strongly
-recommended for other project types. To use CMake, you will need to install it,
+Version 3.15 or higher is required. To use CMake, you will need to install it,
 either from your system package manager or from the [official download
 page](https://cmake.org/download/). For comprehensive documentation on JUCE's
-CMake API, see the [JUCE CMake documentation](/docs/CMake%20API.md). For examples
-which may be useful as starting points for new CMake projects, see the [CMake
-examples directory](/examples/CMake).
+CMake API, see the [JUCE CMake documentation](/docs/CMake%20API.md). For
+examples which may be useful as starting points for new CMake projects, see the
+[CMake examples directory](/examples/CMake).
 
 #### Building Examples
 
@@ -58,9 +56,9 @@ of the target you wish to build.
 
 #### Building JUCE Projects
 
-- __macOS/iOS__: macOS 10.11 and Xcode 7.3.1
-- __Windows__: Windows 8.1 and Visual Studio 2015 64-bit
-- __Linux__: GCC 4.8 (for a full list of dependencies, see
+- __macOS/iOS__: Xcode 9.2 (macOS 10.12.6)
+- __Windows__: Windows 8.1 and Visual Studio 2015 Update 3 64-bit
+- __Linux__: g++ 5.0 or Clang 3.4 (for a full list of dependencies, see
 [here](/docs/Linux%20Dependencies.md)).
 - __Android__: Android Studio on Windows, macOS or Linux
 
@@ -74,17 +72,12 @@ of the target you wish to build.
 
 ## Contributing
 
-For bug reports and features requests, please visit the [JUCE Forum](https://forum.juce.com/) -
-the JUCE developers are active there and will read every post and respond accordingly. When
-submitting a bug report, please ensure that it follows the
-[issue template](/.github/ISSUE_TEMPLATE.txt).
-We don't accept third party GitHub pull requests directly due to copyright restrictions
-but if you would like to contribute any changes please contact us.
+Please see our [contribution guidelines](.github/contributing.md).
 
 ## License
 
-The core JUCE modules (juce_audio_basics, juce_audio_devices, juce_blocks_basics, juce_core
-and juce_events) are permissively licensed under the terms of the
+The core JUCE modules (juce_audio_basics, juce_audio_devices, juce_core and juce_events)
+are permissively licensed under the terms of the
 [ISC license](http://www.isc.org/downloads/software-support-policy/isc-license/).
 Other modules are covered by a
 [GPL/Commercial license](https://www.gnu.org/licenses/gpl-3.0.en.html).

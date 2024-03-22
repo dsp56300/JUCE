@@ -42,7 +42,7 @@
 
  useLocalCopy:          1
 
- pluginCharacteristics: pluginWantsMidiIn, pluginProducesMidiOut
+ pluginCharacteristics: pluginWantsMidiIn, pluginProducesMidiOut, pluginIsMidiEffectPlugin
 
  END_JUCE_PIP_METADATA
 
@@ -80,6 +80,9 @@ public:
     template <typename It>
     void addMessages (It begin, It end)
     {
+        if (begin == end)
+            return;
+
         const auto numNewMessages = (int) std::distance (begin, end);
         const auto numToAdd = juce::jmin (numToStore, numNewMessages);
         const auto numToRemove = jmax (0, (int) messages.size() + numToAdd - numToStore);
@@ -125,6 +128,7 @@ public:
         {
             auto header = std::make_unique<TableHeaderComponent>();
             header->addColumn ("Message", messageColumn, 200, 30, -1, TableHeaderComponent::notSortable);
+            header->addColumn ("Time",    timeColumn,    100, 30, -1, TableHeaderComponent::notSortable);
             header->addColumn ("Channel", channelColumn, 100, 30, -1, TableHeaderComponent::notSortable);
             header->addColumn ("Data",    dataColumn,    200, 30, -1, TableHeaderComponent::notSortable);
             return header;
@@ -141,6 +145,7 @@ private:
     enum
     {
         messageColumn = 1,
+        timeColumn,
         channelColumn,
         dataColumn
     };
@@ -165,6 +170,7 @@ private:
             switch (columnId)
             {
                 case messageColumn: return getEventString (message);
+                case timeColumn:    return String (message.getTimeStamp());
                 case channelColumn: return String (message.getChannel());
                 case dataColumn:    return getDataString (message);
                 default:            break;
@@ -221,7 +227,7 @@ public:
     MidiLoggerPluginDemoProcessor()
         : AudioProcessor (getBusesLayout())
     {
-        state.addChild ({ "uiState", { { "width",  500 }, { "height", 300 } }, {} }, -1, nullptr);
+        state.addChild ({ "uiState", { { "width",  600 }, { "height", 300 } }, {} }, -1, nullptr);
         startTimerHz (60);
     }
 
@@ -243,7 +249,7 @@ public:
     int getNumPrograms() override                                             { return 0; }
     int getCurrentProgram() override                                          { return 0; }
     void setCurrentProgram (int) override                                     {}
-    const String getProgramName (int) override                                { return {}; }
+    const String getProgramName (int) override                                { return "None"; }
     void changeProgramName (int, const String&) override                      {}
 
     void prepareToPlay (double, int) override                                 {}

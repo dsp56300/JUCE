@@ -96,10 +96,8 @@ public:
                 // each sub-element in the XML..
 
                 for (auto* child : xml.getChildIterator())
-                {
-                    jassert (child != nullptr);
-                    addSubItem (new XmlTreeItem (*child));
-                }
+                    if (child != nullptr)
+                        addSubItem (new XmlTreeItem (*child));
             }
         }
         else
@@ -262,6 +260,7 @@ public:
         addAndMakeVisible (codeDocumentComponent);
         codeDocument.addListener (this);
 
+        resultsTree.setTitle ("Results");
         addAndMakeVisible (resultsTree);
         resultsTree.setColour (TreeView::backgroundColourId, Colours::white);
         resultsTree.setDefaultOpenness (true);

@@ -59,8 +59,11 @@ namespace build_tools
 
         File iconFile;
         String projectName;
-        String version;
+        String marketingVersion;
+        String currentProjectVersion;
         String companyCopyright;
+
+        String applicationCategory;
 
         StringPairArray allPreprocessorDefs;
         String documentExtensions;
@@ -78,7 +81,6 @@ namespace build_tools
         String pluginManufacturerCode;
         String IAATypeCode;
         String pluginCode;
-        int versionAsHex                        = 0;
 
         StringArray iPhoneScreenOrientations;
         StringArray iPadScreenOrientations;

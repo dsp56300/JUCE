@@ -35,11 +35,12 @@
 
   ID:                 juce_audio_utils
   vendor:             juce
-  version:            6.0.8
+  version:            6.1.6
   name:               JUCE extra audio utility classes
   description:        Classes for audio-related GUI and miscellaneous tasks.
   website:            http://www.juce.com/juce
   license:            GPL/Commercial
+  minimumCppStandard: 14
 
   dependencies:       juce_audio_processors, juce_audio_formats, juce_audio_devices
   OSXFrameworks:      CoreAudioKit DiscRecording
@@ -79,7 +80,9 @@
 #include "gui/juce_AudioThumbnail.h"
 #include "gui/juce_AudioThumbnailCache.h"
 #include "gui/juce_AudioVisualiserComponent.h"
+#include "gui/juce_KeyboardComponentBase.h"
 #include "gui/juce_MidiKeyboardComponent.h"
+#include "gui/juce_MPEKeyboardComponent.h"
 #include "gui/juce_AudioAppComponent.h"
 #include "gui/juce_BluetoothMidiDevicePairingDialogue.h"
 #include "players/juce_SoundPlayer.h"

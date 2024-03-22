@@ -163,7 +163,7 @@ public:
         {
             auto* tc = bar.items.getUnchecked(i);
 
-            if (dynamic_cast<Spacer*> (tc) == nullptr && ! tc->isVisible())
+            if (tc != nullptr && dynamic_cast<Spacer*> (tc) == nullptr && ! tc->isVisible())
             {
                 oldIndexes.insert (0, i);
                 addAndMakeVisible (tc, 0);
@@ -243,10 +243,7 @@ private:
 Toolbar::Toolbar()
 {
     lookAndFeelChanged();
-    addChildComponent (missingItemsButton.get());
-
-    missingItemsButton->setAlwaysOnTop (true);
-    missingItemsButton->onClick = [this] { showMissingItems(); };
+    initMissingItemButton();
 }
 
 Toolbar::~Toolbar()
@@ -534,6 +531,16 @@ void Toolbar::updateAllItemPositions (bool animate)
 }
 
 //==============================================================================
+void Toolbar::initMissingItemButton()
+{
+    if (missingItemsButton == nullptr)
+        return;
+
+    addChildComponent (*missingItemsButton);
+    missingItemsButton->setAlwaysOnTop (true);
+    missingItemsButton->onClick = [this] { showMissingItems(); };
+}
+
 void Toolbar::showMissingItems()
 {
     jassert (missingItemsButton->isShowing());
@@ -542,7 +549,7 @@ void Toolbar::showMissingItems()
     {
         PopupMenu m;
         auto comp = std::make_unique<MissingItemsComponent> (*this, getThickness());
-        m.addCustomItem (1, std::move (comp));
+        m.addCustomItem (1, std::move (comp), nullptr, TRANS ("Additional Items"));
         m.showMenuAsync (PopupMenu::Options().withTargetComponent (missingItemsButton.get()));
     }
 }
@@ -643,6 +650,7 @@ void Toolbar::itemDropped (const SourceDetails& dragSourceDetails)
 void Toolbar::lookAndFeelChanged()
 {
     missingItemsButton.reset (getLookAndFeel().createToolbarMissingItemsButton (*this));
+    initMissingItemButton();
 }
 
 void Toolbar::mouseDown (const MouseEvent&) {}
@@ -807,6 +815,12 @@ void Toolbar::showCustomisationDialog (ToolbarItemFactory& factory, const int op
 
     (new CustomisationDialog (factory, *this, optionFlags))
         ->enterModalState (true, nullptr, true);
+}
+
+//==============================================================================
+std::unique_ptr<AccessibilityHandler> Toolbar::createAccessibilityHandler()
+{
+    return std::make_unique<AccessibilityHandler> (*this, AccessibilityRole::group);
 }
 
 } // namespace juce

@@ -55,17 +55,8 @@ public:
     /** Attaches the DropShadower to the component you want to shadow. */
     void setOwner (Component* componentToFollow);
 
-
 private:
     //==============================================================================
-    class ShadowWindow;
-
-    Component* owner;
-    OwnedArray<Component> shadowWindows;
-    DropShadow shadow;
-    bool reentrant;
-    WeakReference<Component> lastParentComp;
-
     void componentMovedOrResized (Component&, bool, bool) override;
     void componentBroughtToFront (Component&) override;
     void componentChildrenChanged (Component&) override;
@@ -75,7 +66,19 @@ private:
     void updateParent();
     void updateShadows();
 
+    class ShadowWindow;
+
+    WeakReference<Component> owner;
+    OwnedArray<Component> shadowWindows;
+    DropShadow shadow;
+    bool reentrant = false;
+    WeakReference<Component> lastParentComp;
+
+    class ParentVisibilityChangedListener;
+    std::unique_ptr<ParentVisibilityChangedListener> visibilityChangedListener;
+
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (DropShadower)
+    JUCE_DECLARE_WEAK_REFERENCEABLE (DropShadower)
 };
 
 } // namespace juce

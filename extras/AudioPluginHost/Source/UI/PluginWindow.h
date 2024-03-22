@@ -27,6 +27,19 @@
 
 #include "../Plugins/IOConfigurationWindow.h"
 
+inline String getFormatSuffix (const AudioProcessor* plugin)
+{
+    const auto format = [plugin]()
+    {
+        if (auto* instance = dynamic_cast<const AudioPluginInstance*> (plugin))
+            return instance->getPluginDescription().pluginFormatName;
+
+        return String();
+    }();
+
+    return format.isNotEmpty() ? (" (" + format + ")") : format;
+}
+
 class PluginGraph;
 
 /**
@@ -48,6 +61,12 @@ public:
             p->addListener (this);
 
         log.add ("Parameter debug log started");
+    }
+
+    ~PluginDebugWindow() override
+    {
+        for (auto* p : audioProc.getParameters())
+            p->removeListener (this);
     }
 
     void parameterValueChanged (int parameterIndex, float newValue) override
@@ -140,7 +159,7 @@ public:
     };
 
     PluginWindow (AudioProcessorGraph::Node* n, Type t, OwnedArray<PluginWindow>& windowList)
-       : DocumentWindow (n->getProcessor()->getName(),
+       : DocumentWindow (n->getProcessor()->getName() + getFormatSuffix (n->getProcessor()),
                          LookAndFeel::getDefaultLookAndFeel().findColour (ResizableWindow::backgroundColourId),
                          DocumentWindow::minimiseButton | DocumentWindow::closeButton),
          activeWindowList (windowList),
@@ -149,7 +168,10 @@ public:
         setSize (400, 300);
 
         if (auto* ui = createProcessorEditor (*node->getProcessor(), type))
+        {
             setContentOwned (ui, true);
+            setResizable (ui->isResizable(), false);
+        }
 
        #if JUCE_IOS || JUCE_ANDROID
         auto screenBounds = Desktop::getInstance().getDisplays().getTotalBounds (true).toFloat();
@@ -194,6 +216,16 @@ public:
     const AudioProcessorGraph::Node::Ptr node;
     const Type type;
 
+    BorderSize<int> getBorderThickness() override
+    {
+       #if JUCE_IOS || JUCE_ANDROID
+        const int border = 10;
+        return { border, border, border, border };
+       #else
+        return DocumentWindow::getBorderThickness();
+       #endif
+    }
+
 private:
     float getDesktopScaleFactor() const override     { return 1.0f; }
 
@@ -202,8 +234,9 @@ private:
     {
         if (type == PluginWindow::Type::normal)
         {
-            if (auto* ui = processor.createEditorIfNeeded())
-                return ui;
+            if (processor.hasEditor())
+                if (auto* ui = processor.createEditorIfNeeded())
+                    return ui;
 
             type = PluginWindow::Type::generic;
         }

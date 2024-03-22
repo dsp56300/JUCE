@@ -134,6 +134,8 @@ void juce_checkCurrentlyFocusedTopLevelWindow()
 TopLevelWindow::TopLevelWindow (const String& name, const bool shouldAddToDesktop)
     : Component (name)
 {
+    setTitle (name);
+
     setOpaque (true);
 
     if (shouldAddToDesktop)
@@ -148,7 +150,7 @@ TopLevelWindow::TopLevelWindow (const String& name, const bool shouldAddToDeskto
 
 TopLevelWindow::~TopLevelWindow()
 {
-    shadower.reset();
+    shadower = nullptr;
     TopLevelWindowManager::getInstance()->removeWindow (this);
 }
 
@@ -211,7 +213,7 @@ void TopLevelWindow::setDropShadowEnabled (const bool useShadow)
 
     if (isOnDesktop())
     {
-        shadower.reset();
+        shadower = nullptr;
         Component::addToDesktop (getDesktopWindowStyleFlags());
     }
     else
@@ -220,7 +222,7 @@ void TopLevelWindow::setDropShadowEnabled (const bool useShadow)
         {
             if (shadower == nullptr)
             {
-                shadower.reset (getLookAndFeel().createDropShadowerForComponent (this));
+                shadower = getLookAndFeel().createDropShadowerForComponent (*this);
 
                 if (shadower != nullptr)
                     shadower->setOwner (this);
@@ -228,7 +230,7 @@ void TopLevelWindow::setDropShadowEnabled (const bool useShadow)
         }
         else
         {
-            shadower.reset();
+            shadower = nullptr;
         }
     }
 }
@@ -255,7 +257,7 @@ void TopLevelWindow::recreateDesktopWindow()
 
 void TopLevelWindow::addToDesktop()
 {
-    shadower.reset();
+    shadower = nullptr;
     Component::addToDesktop (getDesktopWindowStyleFlags());
     setDropShadowEnabled (isDropShadowEnabled()); // force an update to clear away any fake shadows if necessary.
 }
@@ -279,6 +281,11 @@ void TopLevelWindow::addToDesktop (int windowStyleFlags, void* nativeWindowToAtt
         sendLookAndFeelChange();
 }
 
+std::unique_ptr<AccessibilityHandler> TopLevelWindow::createAccessibilityHandler()
+{
+    return std::make_unique<AccessibilityHandler> (*this, AccessibilityRole::window);
+}
+
 //==============================================================================
 void TopLevelWindow::centreAroundComponent (Component* c, const int width, const int height)
 {
@@ -291,7 +298,9 @@ void TopLevelWindow::centreAroundComponent (Component* c, const int width, const
     }
     else
     {
-        auto targetCentre = c->localPointToGlobal (c->getLocalBounds().getCentre());
+        const auto scale = getDesktopScaleFactor() / Desktop::getInstance().getGlobalScaleFactor();
+
+        auto targetCentre = c->localPointToGlobal (c->getLocalBounds().getCentre()) / scale;
         auto parentArea = c->getParentMonitorArea();
 
         if (auto* parent = getParentComponent())

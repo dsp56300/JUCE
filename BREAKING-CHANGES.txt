@@ -1,6 +1,557 @@
 JUCE breaking changes
 =====================
 
+Version 6.1.6
+=============
+
+Change
+------
+Unhandled mouse wheel and magnify events will now be passed to the closest
+enclosing enabled ancestor component.
+
+Possible Issues
+---------------
+Components that previously blocked mouse wheel events when in a disabled state
+may no longer block the events as expected.
+
+Workaround
+----------
+If a component should explicitly prevent events from propagating when disabled,
+it should override mouseWheelMove() and mouseMagnify() to do nothing when the
+component is disabled.
+
+Rationale
+---------
+Previously, unhandled wheel events would be passed to the parent component,
+but only if the parent was enabled. This meant that scrolling on a component
+nested inside a disabled component would have no effect by default. This
+behaviour was not intuitive.
+
+
+Change
+------
+The invalidPressure, invalidOrientation, invalidRotation, invalidTiltX and
+invalidTiltY members of MouseInputSource have been deprecated.
+
+Possible Issues
+---------------
+Deprecation warnings will be seen when compiling code which uses these members
+and eventually builds will fail when they are later removed from the API.
+
+Workaround
+----------
+Use the equivalent defaultPressure, defaultOrientation, defaultRotation,
+defaultTiltX and defaultTiltY members of MouseInputSource.
+
+Rationale
+---------
+The deprecated members represent valid values and the isPressureValid() etc.
+functions return true when using them. This could be a source of confusion and
+may be inviting programming errors. The new names are in line with the ongoing
+practice of using these values to provide a neutral default in the absence of
+actual OS provided values.
+
+
+Change
+------
+Plugin wrappers will no longer call processBlockBypassed() if the wrapped
+AudioProcessor returns a parameter from getBypassParameter().
+
+Possible Issues
+---------------
+Plugins that used to depend on processBlockBypassed() being called may no
+longer correctly enter a bypassed state.
+
+Workaround
+----------
+AudioProcessors that implement getBypassParameter() must check the current
+value of the bypass parameter on each call to processBlock(), and bypass
+processing as appropriate. When switching between bypassed and non-bypassed
+states, the plugin must use some sort of ramping or smoothing to avoid
+discontinuities in the output. If the plugin introduces latency when not
+bypassed, the plugin must delay its output when in bypassed mode so that the
+overall latency does not change when enabling/disabling bypass.
+
+Rationale
+---------
+The documentation for AudioProcessor::getBypassParameter() says
+> if this method returns a non-null value, you should never call
+  processBlockBypassed but use the returned parameter to control the bypass
+  state instead.
+Some plugin wrappers were not following this rule. After this change, the
+behaviour of all plugin wrappers is consistent with the documented behaviour.
+
+
+Change
+------
+The ComponentPeer::getFrameSize() function has been deprecated on Linux.
+
+Possible Issues
+---------------
+Deprecation warnings will be seen when compiling code which uses this function
+and eventually builds will fail when it is later removed from the API.
+
+Workaround
+----------
+Use the ComponentPeer::getFrameSizeIfPresent() function. The new function returns
+an OptionalBorderSize object. Use operator bool() to determine if the border size
+is valid, then access the value using operator*() only if it is.
+
+Rationale
+---------
+The XWindow system cannot return a valid border size immediately after window
+creation. ComponentPeer::getFrameSize() returns a default constructed
+BorderSize<int> instance in such cases that corresponds to a frame size of
+zero. That however can be a valid value, and needs to be treated differently
+from the situation when the frame size is not yet available.
+
+
+Change
+------
+The return type of XWindowSystem::getBorderSize() was changed to
+ComponentPeer::OptionalBorderSize.
+
+Possible Issues
+---------------
+User code that uses XWindowSystem::getBorderSize() will fail to build.
+
+Workaround
+----------
+Use operator bool() to determine the validity of the new return value and
+access the contained value using operator*().
+
+Rationale
+---------
+The XWindow system cannot immediately report the correct border size after
+window creation. The underlying X11 calls will signal whether querying the
+border size was successful, but there was no way to forward this information
+through XWindowSystem::getBorderSize() until this change.
+
+
+Version 6.1.5
+=============
+
+Change
+------
+XWindowSystemUtilities::XSettings now has a private constructor.
+
+Possible Issues
+---------------
+User code that uses XSettings::XSettings() will fail to build.
+
+Workaround
+----------
+Use the XSettings::createXSettings() factory function.
+
+Rationale
+---------
+The XSETTINGS facility is not available on all Linux distributions and the old
+constructor would fail on such systems, potentially crashing the application.
+The factory function will return nullptr in such situations instead.
+
+
+Version 6.1.3
+=============
+
+Change
+------
+The format specific structs of ExtensionsVisitor now return pointers to forward
+declared types instead of `void*`. For this purpose the `struct AEffect;`
+forward declaration was placed inside the global namespace.
+
+Possible Issues
+---------------
+User code that includes the VST headers inside a namespace may fail to build,
+because the forward declared type can collide with the contents of `aeffect.h`.
+
+Workaround
+----------
+The collision can be avoided by placing a `struct AEffect;` forward declaration
+in the same namespace where the VST headers are included. The forward
+declaration must come before the inclusion.
+
+Rationale
+---------
+Using the forward declared types eliminates the need for error prone casting
+at the site where the ExtensionsVisitor facility is used.
+
+
+Change
+------
+ListBox::createSnapshotOfRows now returns ScaledImage instead of Image.
+
+Possible Issues
+---------------
+User code that overrides this function will fail to build.
+
+Workaround
+----------
+To emulate the old behaviour, simply wrap the Image that was previous returned
+into a ScaledImage and return that instead.
+
+Rationale
+---------
+Returning a ScaledImage allows the overriding function to specify the scale
+at which the image should be drawn. Returning an oversampled image will provide
+smoother-looking results on high resolution displays.
+
+
+Change
+------
+AudioFrameRate::frameRate is now a class type instead of an enum.
+
+Possible Issues
+---------------
+Code that read the old enum value will not compile.
+
+Workaround
+----------
+Call frameRate.getType() to fetch the old enum type. Alternatively, use the new
+getBaseRate(), isDrop(), isPullDown(), and getEffectiveRate() functions. The
+new functions provide a more accurate description of the host's frame rate.
+
+Rationale
+---------
+The old enum-based interface was not flexible enough to describe all the frame
+rates that might be reported by a plugin host.
+
+
+Change
+------
+FlexItem::alignSelf now defaults to "autoAlign" rather than "stretch".
+
+Possible Issues
+---------------
+FlexBox layouts will be different in cases where FlexBox::alignItems is set to
+a value other than "stretch". This is because each FlexItem will now default
+to using the FlexBox's alignItems value. Layouts that explicitly set
+FlexItem::alignSelf on each item will not be affected.
+
+Workaround
+----------
+To restore the previous layout behaviour, set FlexItem::alignSelf to "stretch"
+on all FlexItems that would otherwise use the default value for alignSelf.
+
+Rationale
+---------
+The new behaviour more closely matches the behaviour of CSS FlexBox
+implementations. In CSS, "align-self" has an initial value of "auto", which
+computes to the parent's "align-items" value.
+
+
+Change
+------
+Functions on AudioPluginInstance that can add parameters have been made
+private.
+
+Possible Issues
+---------------
+Code implementing custom plugin formats may stop building if it calls these
+functions.
+
+Workaround
+----------
+When implementing custom plugin formats, ensure that the plugin parameters
+derive from AudioPluginInstance::HostedParameter and then use
+addHostedParameter, addHostedParameterGroup or setHostedParameterTree to add
+the parameters to the plugin instance.
+
+Rationale
+---------
+In a plugin host, it is very important to be able to uniquely identify
+parameters across different versions of the same plugin. To make this possible,
+we needed to introduce a way of retrieving a unique ID for each parameter,
+which is now possible using the HostedParameter class. However, we also needed
+to enforce that all AudioPluginInstances can only have parameters which are of
+the type HostedParameter, which required hiding the old functions.
+
+
+Version 6.1.0
+=============
+
+Change
+------
+juce::gl::loadFunctions() no longer loads extension functions.
+
+Possible Issues
+---------------
+Code that depended on extension functions being loaded automatically may cease
+to function correctly.
+
+Workaround
+----------
+Extension functions can now be loaded using juce::gl::loadExtensions().
+
+Rationale
+---------
+There are a great number of extension functions, and on some systems these can
+be slow to load (i.e. a second or so). Projects that do not require these
+extension functions should not have to pay for this unnecessary overhead. Now,
+only core functions will be loaded by default, and extensions can be loaded
+explicitly in projects that require such functionality.
+
+
+Change
+------
+Thread::setPriority() will no longer set a realtime scheduling policy for all
+threads with non-zero priorities on POSIX systems.
+
+Possible Issues
+---------------
+Threads that implicitly relied on using a realtime policy will no longer
+request a realtime policy if their priority is 7 or lower.
+
+Workaround
+----------
+For threads that require a realtime policy on POSIX systems, request a priority
+of 8 or higher by calling Thread::setPriority() or
+Thread::setCurrentThreadPriority().
+
+Rationale
+---------
+By default, new Thread instances have a priority of 5. Previously, non-zero
+priorities corresponded to realtime scheduling policies, meaning that new
+Threads would use the realtime scheduling policy unless they explicitly
+requested a priority of 0. However, most threads do not and should not require
+realtime scheduling. Setting a realtime policy on all newly-created threads may
+degrade performance, as multiple realtime threads will end up fighting for
+limited resources.
+
+
+Change
+------
+The JUCE_GLSL_VERSION preprocessor definition has been removed.
+
+Possible Issues
+---------------
+Code which used this definition will no longer compile.
+
+Workaround
+----------
+Use OpenGLHelpers::getGLSLVersionString to retrieve a version string which is
+consistent with the capabilities of the current OpenGL context.
+
+Rationale
+---------
+A compile-time version string is not very useful, as OpenGL versions and
+capabilities can change at runtime. Replacing this macro with a function allows
+querying the capabilities of the current context at runtime.
+
+
+Change
+------
+The minimum support CMake version is now 3.15.
+
+Possible Issues
+---------------
+It will no longer be possible to configure JUCE projects with CMake versions
+between 3.12 and 3.14 inclusive.
+
+Workaround
+----------
+No workaround is available.
+
+Rationale
+---------
+Moving to 3.15 allows us to use target_link_directories and
+target_link_options, which were introduced in 3.13, which in turn allows us to
+provide support for bundled precompiled libraries in modules. Plugins already
+required CMake 3.15, so this change just brings other target types in line with
+the requirements for plugins.
+
+
+Change
+------
+The default value of JUCE_MODAL_LOOPS_PERMITTED has been changed from 1 to 0.
+
+Possible Issues
+---------------
+With JUCE_MODAL_LOOPS_PERMITTED set to 0 code that previously relied upon modal
+loops will need to be rewritten to use asynchronous versions of the modal
+functions. There is no non-modal alternative to
+AlterWindow::showNativeDialogBox and the previously modal behaviour of the
+MultiDocumentPanel destructor has changed.
+
+Workaround
+----------
+Set JUCE_MODAL_LOOPS_PERMITTED back to 1.
+
+Rationale
+---------
+Modal operations are a frequent source of problems, particularly when used in
+plug-ins. On Android modal loops are not possible, so people wanting to target
+Android often have an unwelcome surprise when then have to rewrite what they
+assumed to be platform independent code. Changing the default addresses these
+problems.
+
+
+Change
+------
+The minimum supported C++ standard is now C++14 and the oldest supported
+compilers on macOS and Linux are now Xcode 9.2, GCC 5.0 and Clang 3.4.
+
+Possible Issues
+---------------
+Older compilers will no longer be able to compile JUCE. People using Xcode 8.5
+on OS X 10.11 will need to update the operating system to OS X 10.12 to be able
+to use Xcode 9.2.
+
+Workaround
+----------
+No workaround is available.
+
+Rationale
+---------
+This compiler upgrade will allow the use of C++14 within the framework.
+
+
+Change
+------
+Platform GL headers are no longer included in juce_opengl.h
+
+Possible Issues
+---------------
+Projects depending on symbols declared in these headers may fail to build.
+
+Workaround
+----------
+The old platform-supplied headers have been replaced with a new juce_gl.h
+header which is generated using the XML registry files supplied by Khronos.
+This custom header declares GL symbols in the juce::gl namespace. If your code
+only needs to be JUCE-compatible, you can explicitly qualify each name with
+`juce::gl::`. If you need your code to build with different extension-loader
+libraries (GLEW, GL3W etc.) you can make all GL symbols visible without
+additional qualification with `using namespace juce::gl`.
+
+Rationale
+---------
+Using our own GL headers allows us to generate platform-independent headers
+which include symbols for all specified OpenGL versions and extensions. Note
+that although the function signatures exist, they may not resolve to a function
+at runtime. If your code uses commands from an extension or recent GL version,
+you should check each function pointer against `nullptr` before attempting to
+use it. To avoid repeatedly checking, you could query a subset of functions
+after calling gl::loadFunctions() and cache the results. Supplying custom GL
+headers also allows us to use C++ techniques (namespaces, references), making
+the headers safer than the platform-defined headers. Platform headers are
+generally written in C, and export a significant portion of their symbols as
+preprocessor definitions.
+
+
+Change
+------
+The functions `getComponentAsyncLayerBackedViewDisabled`
+and `setComponentAsyncLayerBackedViewDisabled` were moved into the juce
+namespace.
+
+Possible Issues
+---------------
+Code that declares these functions may fail to link.
+
+Workaround
+----------
+Move declarations of these functions into the juce namespace.
+
+Rationale
+---------
+Although the names of these functions are unlikely to collide with functions
+from other libraries, we can make such collisions much more unlikely by keeping
+JUCE code in the juce namespace.
+
+
+Change
+------
+The `juce_blocks_basics` module was removed.
+
+Possible Issues
+---------------
+Projects depending on `juce_blocks_basics` will not build.
+
+Workaround
+----------
+The BLOCKS API is now located in a separate repository:
+https://github.com/WeAreROLI/roli_blocks_basics
+Projects which used to depend on `juce_blocks_basics` can use
+`roli_blocks_basics` instead.
+
+Rationale
+---------
+ROLI is no longer involved with the development of JUCE. Therefore, development
+on the BLOCKS API has been moved out of the JUCE repository, and to a new
+repository managed by ROLI.
+
+
+Change
+------
+The live build functionality of the Projucer has been removed.
+
+Possible Issues
+---------------
+You will no longer be able to use live build in the Projucer.
+
+Workaround
+----------
+None.
+
+Rationale
+---------
+Keeping the live build compatible with the latest compilers on all our
+supported platforms is a very substantial maintenance burden, but very few
+people are using this feature of the Projucer. Removing the live build will
+simplify the code and our release process.
+
+
+Change
+------
+`Component::createFocusTraverser()` has been renamed to
+`Component::createKeyboardFocusTraverser()` and now returns a `std::unique_ptr`
+instead of a raw pointer. `Component::createFocusTraverser()` is a new method
+for controlling basic focus traversal and not keyboard focus traversal.
+
+Possible Issues
+---------------
+Derived Components that override the old method will no longer compile.
+
+Workaround
+----------
+Override the new method. Be careful to override
+`createKeyboardFocusTraverser()` and not `createFocusTraverser()` to ensure
+that the behaviour is the same.
+
+Rationale
+---------
+The ownership of this method is now clearer as the previous code relied on the
+caller deleting the object. The name has changed to accommodate the new
+`Component::createFocusTraverser()` method that returns an object for
+determining basic focus traversal, of which keyboard focus is generally a
+subset.
+
+
+Change
+------
+PluginDescription::uid has been deprecated and replaced with a new 'uniqueId'
+data member.
+
+Possible Issues
+---------------
+Code using the old data member will need to be updated in order to compile.
+
+Workaround
+----------
+Code that used to use 'uid' to identify plugins should switch to using
+'uniqueId', with some caveats - see "Rationale" for details.
+
+Rationale
+---------
+The 'uniqueId' member has the benefit of being consistent for
+a given VST3 across Windows, macOS, and Linux. However, the value of the
+uniqueId may differ from the value of the old uid on some platforms. The value
+of the old 'uid' member can now be found in the 'deprecatedUid' member, which
+should allow clients to implement logic such as checking a saved uid against
+the new uniqueId, and falling back to the deprecatedUid. This should allow
+hosts to gracefully upgrade from the old uid values to the new values.
+
+
 Version 6.0.8
 =============
 
@@ -83,8 +634,8 @@ Change
 ------
 CharacterFunctions::readDoubleValue now returns values consistent with other
 C++ number parsing libraries. Parsing values smaller than the minimum number
-respresentable in a double will return (+/-)0.0 and parsing values larger than
-the maximum number respresentable in a double will return (+/-)inf.
+representable in a double will return (+/-)0.0 and parsing values larger than
+the maximum number representable in a double will return (+/-)inf.
 
 Possible Issues
 ---------------
@@ -341,8 +892,8 @@ Limited.
 
 Possible Issues
 ---------------
-Exising projects, particularly Android, may need to be resaved by the Projucer
-and have the old build artifacts deleted before they will build.
+Existing projects, particularly Android, may need to be resaved by the Projucer
+and have the old build artefacts deleted before they will build.
 
 Workaround
 ----------
@@ -396,7 +947,7 @@ Update the subproject path in the Projucer.
 
 Rationale
 ---------
-Most other Xcode specific paths are specified reltive to the build directory.
+Most other Xcode specific paths are specified relative to the build directory.
 This change brings the Xcode subproject path in line with the rest of the
 configuration.
 
@@ -746,7 +1297,7 @@ Multiple changes to low-level, non-public JNI and Android APIs.
 Possible Issues
 ---------------
 If you were using any non-public, low-level JNI macros, calling java code or
-recieving JNI callbacks, then your code will probably no longer work. See the
+receiving JNI callbacks, then your code will probably no longer work. See the
 forum for further details.
 
 Workaround
@@ -775,7 +1326,7 @@ Rationale
 ---------
 Less than 0.5% of all devices in the world run versions of Android older than
 Android 4.1. In the interest of keeping JUCE code clean and lean, we must
-depricate support for very old Android versions from time to time.
+deprecate support for very old Android versions from time to time.
 
 
 Version 5.4.0
@@ -1471,7 +2022,7 @@ or
 Rationale
 ---------
 Previously, PopupMenus would not scale if the GUI of the target component (or
-any of it’s parents) were scaled. The only way to scale PopupMenus was via the
+any of its parents) were scaled. The only way to scale PopupMenus was via the
 global scaling factor. This had several drawbacks as the global scaling factor
 would scale everything. This was especially problematic in plug-in editors.
 
@@ -1576,7 +2127,7 @@ then you will need to update your plug-in to the new multi-bus API. Pre JUCE
 4.0.0 plug-ins are not affected apart from other breaking changes listed in
 this document.
 
-Woraround
+Workaround
 ---------
 None.
 

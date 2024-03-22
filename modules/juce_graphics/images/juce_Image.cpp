@@ -97,7 +97,9 @@ public:
 
     void initialiseBitmapData (Image::BitmapData& bitmap, int x, int y, Image::BitmapData::ReadWriteMode mode) override
     {
-        bitmap.data = imageData + (size_t) x * (size_t) pixelStride + (size_t) y * (size_t) lineStride;
+        const auto offset = (size_t) x * (size_t) pixelStride + (size_t) y * (size_t) lineStride;
+        bitmap.data = imageData + offset;
+        bitmap.size = (size_t) (height * lineStride) - offset;
         bitmap.pixelFormat = pixelFormat;
         bitmap.lineStride = lineStride;
         bitmap.pixelStride = pixelStride;
@@ -144,7 +146,7 @@ int NativeImageType::getTypeID() const
     return 1;
 }
 
-#if JUCE_WINDOWS || JUCE_LINUX
+#if JUCE_WINDOWS || JUCE_LINUX || JUCE_BSD
 ImagePixelData::Ptr NativeImageType::create (Image::PixelFormat format, int width, int height, bool clearImage) const
 {
     return new SoftwarePixelData (format, width, height, clearImage);
@@ -264,8 +266,6 @@ Image& Image::operator= (Image&& other) noexcept
 Image::~Image()
 {
 }
-
-JUCE_DECLARE_DEPRECATED_STATIC (const Image Image::null;)
 
 int Image::getReferenceCount() const noexcept           { return image == nullptr ? 0 : image->getSharedCount(); }
 int Image::getWidth() const noexcept                    { return image == nullptr ? 0 : image->width; }
@@ -683,5 +683,18 @@ void Image::moveImageSection (int dx, int dy,
         }
     }
 }
+
+//==============================================================================
+#if JUCE_ALLOW_STATIC_NULL_VARIABLES
+
+JUCE_BEGIN_IGNORE_WARNINGS_GCC_LIKE ("-Wdeprecated-declarations")
+JUCE_BEGIN_IGNORE_WARNINGS_MSVC (4996)
+
+const Image Image::null;
+
+JUCE_END_IGNORE_WARNINGS_GCC_LIKE
+JUCE_END_IGNORE_WARNINGS_MSVC
+
+#endif
 
 } // namespace juce

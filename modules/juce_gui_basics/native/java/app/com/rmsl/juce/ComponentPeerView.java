@@ -40,12 +40,17 @@ import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.ViewTreeObserver;
+import android.view.accessibility.AccessibilityNodeProvider;
+import android.view.accessibility.AccessibilityNodeInfo;
+import android.view.accessibility.AccessibilityManager;
 import android.view.inputmethod.BaseInputConnection;
 import android.view.inputmethod.EditorInfo;
 import android.view.inputmethod.InputConnection;
 import android.view.inputmethod.InputMethodManager;
 
 import java.lang.reflect.Method;
+import java.util.ArrayList;
+import java.util.List;
 
 public final class ComponentPeerView extends ViewGroup
         implements View.OnFocusChangeListener, Application.ActivityLifecycleCallbacks
@@ -131,14 +136,15 @@ public final class ComponentPeerView extends ViewGroup
         return opaque;
     }
 
-    private boolean opaque;
+    private final boolean opaque;
     private long host;
-    private Paint paint = new Paint ();
+    private final Paint paint = new Paint ();
 
     //==============================================================================
     private native void handleMouseDown (long host, int index, float x, float y, long time);
     private native void handleMouseDrag (long host, int index, float x, float y, long time);
     private native void handleMouseUp (long host, int index, float x, float y, long time);
+    private native void handleAccessibilityHover (long host, int action, float x, float y, long time);
 
     @Override
     public boolean onTouchEvent (MotionEvent event)
@@ -219,8 +225,20 @@ public final class ComponentPeerView extends ViewGroup
         return false;
     }
 
+    @Override
+    public boolean onHoverEvent (MotionEvent event)
+    {
+        if (accessibilityManager.isTouchExplorationEnabled())
+        {
+            handleAccessibilityHover (host, event.getActionMasked(), event.getRawX(), event.getRawY(), event.getEventTime());
+            return true;
+        }
+
+        return false;
+    }
+
     //==============================================================================
-    private native void handleKeyDown (long host, int keycode, int textchar);
+    private native void handleKeyDown (long host, int keycode, int textchar, int kbFlags);
     private native void handleKeyUp (long host, int keycode, int textchar);
     private native void handleBackButton (long host);
     private native void handleKeyboardHidden (long host);
@@ -265,7 +283,7 @@ public final class ComponentPeerView extends ViewGroup
                 return super.onKeyDown (keyCode, event);
             case KeyEvent.KEYCODE_BACK:
             {
-                backButtonPressed();
+                backButtonPressed ();
                 return true;
             }
 
@@ -273,7 +291,10 @@ public final class ComponentPeerView extends ViewGroup
                 break;
         }
 
-        handleKeyDown (host, keyCode, event.getUnicodeChar ());
+        handleKeyDown (host,
+                       keyCode,
+                       event.getUnicodeChar (),
+                       event.getMetaState ());
         return true;
     }
 
@@ -299,7 +320,11 @@ public final class ComponentPeerView extends ViewGroup
         if (event.getCharacters () != null)
         {
             int utf8Char = event.getCharacters ().codePointAt (0);
-            handleKeyDown (host, utf8Char, utf8Char);
+
+            handleKeyDown (host,
+                           keyCode,
+                           utf8Char,
+                           event.getMetaState ());
             return true;
         }
 
@@ -337,7 +362,7 @@ public final class ComponentPeerView extends ViewGroup
                 Rect r = new Rect ();
 
                 View parentView = getRootView ();
-                int diff = 0;
+                int diff;
 
                 if (parentView == null)
                 {
@@ -360,18 +385,14 @@ public final class ComponentPeerView extends ViewGroup
                     keyboardShown = true;
             }
 
-            ;
-
             private boolean keyboardShown;
         }
 
-        ;
-
-        private ComponentPeerView view;
-        private TreeObserver viewTreeObserver = new TreeObserver ();
+        private final ComponentPeerView view;
+        private final TreeObserver viewTreeObserver = new TreeObserver ();
     }
 
-    private KeyboardDismissListener keyboardDismissListener = new KeyboardDismissListener (this);
+    private final KeyboardDismissListener keyboardDismissListener = new KeyboardDismissListener (this);
 
     // this is here to make keyboard entry work on a Galaxy Tab2 10.1
     @Override
@@ -514,5 +535,77 @@ public final class ComponentPeerView extends ViewGroup
 
         // Ensure that navigation/status bar visibility is correctly restored.
         handleAppResumed (host);
+    }
+
+    //==============================================================================
+    private native boolean populateAccessibilityNodeInfo (long host, int virtualViewId, AccessibilityNodeInfo info);
+    private native boolean handlePerformAction (long host, int virtualViewId, int action, Bundle arguments);
+    private native Integer getInputFocusViewId (long host);
+    private native Integer getAccessibilityFocusViewId (long host);
+
+    private final class JuceAccessibilityNodeProvider extends AccessibilityNodeProvider
+    {
+        public JuceAccessibilityNodeProvider (ComponentPeerView viewToUse)
+        {
+            view = viewToUse;
+        }
+
+        @Override
+        public AccessibilityNodeInfo createAccessibilityNodeInfo (int virtualViewId)
+        {
+            if (host == 0)
+                return null;
+
+            final AccessibilityNodeInfo nodeInfo = AccessibilityNodeInfo.obtain (view, virtualViewId);
+
+            if (! populateAccessibilityNodeInfo (host, virtualViewId, nodeInfo))
+            {
+                nodeInfo.recycle();
+                return null;
+            }
+
+            return nodeInfo;
+        }
+
+        @Override
+        public List<AccessibilityNodeInfo> findAccessibilityNodeInfosByText (String text, int virtualViewId)
+        {
+            return new ArrayList<>();
+        }
+
+        @Override
+        public AccessibilityNodeInfo findFocus (int focus)
+        {
+            if (host == 0)
+                return null;
+
+            Integer focusViewId = (focus == AccessibilityNodeInfo.FOCUS_INPUT ? getInputFocusViewId (host)
+                                                                              : getAccessibilityFocusViewId (host));
+
+            if (focusViewId != null)
+                return createAccessibilityNodeInfo (focusViewId);
+
+            return null;
+        }
+
+        @Override
+        public boolean performAction (int virtualViewId, int action, Bundle arguments)
+        {
+            if (host == 0)
+                return false;
+
+            return handlePerformAction (host, virtualViewId, action, arguments);
+        }
+
+        private final ComponentPeerView view;
+    }
+
+    private final JuceAccessibilityNodeProvider nodeProvider = new JuceAccessibilityNodeProvider (this);
+    private final AccessibilityManager accessibilityManager = (AccessibilityManager) getContext ().getSystemService (Context.ACCESSIBILITY_SERVICE);
+
+    @Override
+    public AccessibilityNodeProvider getAccessibilityNodeProvider ()
+    {
+        return nodeProvider;
     }
 }

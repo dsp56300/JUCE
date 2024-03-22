@@ -349,6 +349,7 @@ public:
         Rectangle<int> getBounds() const noexcept                           { return Rectangle<int> (width, height); }
 
         uint8* data;             /**< The raw pixel data, packed according to the image's pixel format. */
+        size_t size;             /**< The number of valid/allocated bytes after data. May be smaller than "lineStride * height" if this is a section of a larger image. */
         PixelFormat pixelFormat; /**< The format of the data. */
         int lineStride;          /**< The number of bytes between each line. */
         int pixelStride;         /**< The number of bytes between each pixel. */
@@ -413,10 +414,12 @@ public:
     /** @internal */
     explicit Image (ReferenceCountedObjectPtr<ImagePixelData>) noexcept;
 
-    /* A null Image object that can be used when you need to return an invalid image.
-        @deprecated If you need a default-constructed var, just use Image() or {}.
-    */
-    JUCE_DEPRECATED_STATIC (static const Image null;)
+    //==============================================================================
+   #if JUCE_ALLOW_STATIC_NULL_VARIABLES && ! defined (DOXYGEN)
+    /* A null Image object that can be used when you need to return an invalid image. */
+    [[deprecated ("If you need a default-constructed var, just use Image() or {}.")]]
+    static const Image null;
+   #endif
 
 private:
     //==============================================================================

@@ -527,7 +527,21 @@ void ResizableWindow::parentSizeChanged()
 String ResizableWindow::getWindowStateAsString()
 {
     updateLastPosIfShowing();
-    return (isFullScreen() && ! isKioskMode() ? "fs " : "") + lastNonFullScreenPos.toString();
+    auto stateString = (isFullScreen() && ! isKioskMode() ? "fs " : "") + lastNonFullScreenPos.toString();
+
+   #if JUCE_LINUX
+    if (auto* peer = isOnDesktop() ? getPeer() : nullptr)
+    {
+        if (const auto optionalFrameSize = peer->getFrameSizeIfPresent())
+        {
+            const auto& frameSize = *optionalFrameSize;
+            stateString << " frame " << frameSize.getTop() << ' ' << frameSize.getLeft()
+                        << ' ' << frameSize.getBottom() << ' ' << frameSize.getRight();
+        }
+    }
+   #endif
+
+    return stateString;
 }
 
 bool ResizableWindow::restoreWindowStateFromString (const String& s)
@@ -540,7 +554,7 @@ bool ResizableWindow::restoreWindowStateFromString (const String& s)
     const bool fs = tokens[0].startsWithIgnoreCase ("fs");
     const int firstCoord = fs ? 1 : 0;
 
-    if (tokens.size() != firstCoord + 4)
+    if (tokens.size() < firstCoord + 4)
         return false;
 
     Rectangle<int> newPos (tokens[firstCoord].getIntValue(),
@@ -554,7 +568,30 @@ bool ResizableWindow::restoreWindowStateFromString (const String& s)
     auto* peer = isOnDesktop() ? getPeer() : nullptr;
 
     if (peer != nullptr)
-        peer->getFrameSize().addTo (newPos);
+    {
+        if (const auto frameSize = peer->getFrameSizeIfPresent())
+            frameSize->addTo (newPos);
+    }
+
+   #if JUCE_LINUX
+    if (peer == nullptr || ! peer->getFrameSizeIfPresent())
+    {
+        // We need to adjust for the frame size before we create a peer, as X11
+        // doesn't provide this information at construction time.
+        if (tokens[firstCoord + 4] == "frame" && tokens.size() == firstCoord + 9)
+        {
+            BorderSize<int> frame { tokens[firstCoord + 5].getIntValue(),
+                                    tokens[firstCoord + 6].getIntValue(),
+                                    tokens[firstCoord + 7].getIntValue(),
+                                    tokens[firstCoord + 8].getIntValue() };
+
+            newPos.setX (newPos.getX() - frame.getLeft());
+            newPos.setY (newPos.getY() - frame.getTop());
+
+            setBounds (newPos);
+        }
+    }
+   #endif
 
     {
         auto& desktop = Desktop::getInstance();
@@ -576,7 +613,9 @@ bool ResizableWindow::restoreWindowStateFromString (const String& s)
 
     if (peer != nullptr)
     {
-        peer->getFrameSize().subtractFrom (newPos);
+        if (const auto frameSize = peer->getFrameSizeIfPresent())
+            frameSize->subtractFrom (newPos);
+
         peer->setNonFullScreenBounds (newPos);
     }
 

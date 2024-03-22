@@ -67,7 +67,7 @@ public:
                                     const String& button1,
                                     const String& button2,
                                     const String& button3,
-                                    AlertWindow::AlertIconType iconType,
+                                    MessageBoxIconType iconType,
                                     int numButtons, Component* associatedComponent) override;
 
     void drawAlertBox (Graphics&, AlertWindow&, const Rectangle<int>& textArea, TextLayout&) override;
@@ -299,7 +299,8 @@ public:
                                         bool positionTitleBarButtonsOnLeft) override;
 
     //==============================================================================
-    DropShadower* createDropShadowerForComponent (Component*) override;
+    std::unique_ptr<DropShadower> createDropShadowerForComponent (Component&) override;
+    std::unique_ptr<FocusOutline> createFocusOutlineForComponent (Component&) override;
 
     //==============================================================================
     void drawStretchableLayoutResizerBar (Graphics&, int w, int h, bool isVerticalBar,

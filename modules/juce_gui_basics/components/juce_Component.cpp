@@ -26,6 +26,17 @@
 namespace juce
 {
 
+static Component* findFirstEnabledAncestor (Component* in)
+{
+    if (in == nullptr)
+        return nullptr;
+
+    if (in->isEnabled())
+        return in;
+
+    return findFirstEnabledAncestor (in->getParentComponent());
+}
+
 Component* Component::currentlyFocusedComponent = nullptr;
 
 
@@ -264,6 +275,18 @@ struct ScalingHelpers
     static Rectangle<int>   subtractPosition (Rectangle<int> p,   const Component& c) noexcept  { return p - c.getPosition(); }
     static Point<float>     subtractPosition (Point<float> p,     const Component& c) noexcept  { return p - c.getPosition().toFloat(); }
     static Rectangle<float> subtractPosition (Rectangle<float> p, const Component& c) noexcept  { return p - c.getPosition().toFloat(); }
+
+    static Point<float> screenPosToLocalPos (Component& comp, Point<float> pos)
+    {
+        if (auto* peer = comp.getPeer())
+        {
+            pos = peer->globalToLocal (pos);
+            auto& peerComp = peer->getComponent();
+            return comp.getLocalPoint (&peerComp, unscaledScreenPosToScaled (peerComp, pos));
+        }
+
+        return comp.getLocalPoint (nullptr, unscaledScreenPosToScaled (comp, pos));
+    }
 };
 
 static const char colourPropertyPrefix[] = "jcclr_";
@@ -301,11 +324,11 @@ struct Component::ComponentHelpers
     }
 
     //==============================================================================
-    static bool hitTest (Component& comp, Point<int> localPoint)
+    static bool hitTest (Component& comp, Point<float> localPoint)
     {
-        return isPositiveAndBelow (localPoint.x, comp.getWidth())
-            && isPositiveAndBelow (localPoint.y, comp.getHeight())
-            && comp.hitTest (localPoint.x, localPoint.y);
+        const auto intPoint = localPoint.roundToInt();
+        return Rectangle<int> { comp.getWidth(), comp.getHeight() }.toFloat().contains (localPoint)
+               && comp.hitTest (intPoint.x, intPoint.y);
     }
 
     // converts an unscaled position within a peer to the local position within that peer's component
@@ -329,47 +352,48 @@ struct Component::ComponentHelpers
     }
 
     template <typename PointOrRect>
-    static PointOrRect convertFromParentSpace (const Component& comp, PointOrRect pointInParentSpace)
+    static PointOrRect convertFromParentSpace (const Component& comp, const PointOrRect pointInParentSpace)
     {
-        if (comp.affineTransform != nullptr)
-            pointInParentSpace = pointInParentSpace.transformedBy (comp.affineTransform->inverted());
+        const auto transformed = comp.affineTransform != nullptr ? pointInParentSpace.transformedBy (comp.affineTransform->inverted())
+                                                                 : pointInParentSpace;
 
         if (comp.isOnDesktop())
         {
             if (auto* peer = comp.getPeer())
-                pointInParentSpace = ScalingHelpers::unscaledScreenPosToScaled
-                                        (comp, peer->globalToLocal (ScalingHelpers::scaledScreenPosToUnscaled (pointInParentSpace)));
-            else
-                jassertfalse;
-        }
-        else
-        {
-            pointInParentSpace = ScalingHelpers::subtractPosition (pointInParentSpace, comp);
+                return ScalingHelpers::unscaledScreenPosToScaled (comp, peer->globalToLocal (ScalingHelpers::scaledScreenPosToUnscaled (transformed)));
+
+            jassertfalse;
+            return transformed;
         }
 
-        return pointInParentSpace;
+        if (comp.getParentComponent() == nullptr)
+            return ScalingHelpers::subtractPosition (ScalingHelpers::unscaledScreenPosToScaled (comp, ScalingHelpers::scaledScreenPosToUnscaled (transformed)), comp);
+
+        return ScalingHelpers::subtractPosition (transformed, comp);
     }
 
     template <typename PointOrRect>
-    static PointOrRect convertToParentSpace (const Component& comp, PointOrRect pointInLocalSpace)
+    static PointOrRect convertToParentSpace (const Component& comp, const PointOrRect pointInLocalSpace)
     {
-        if (comp.isOnDesktop())
+        const auto preTransform = [&]
         {
-            if (auto* peer = comp.getPeer())
-                pointInLocalSpace = ScalingHelpers::unscaledScreenPosToScaled
-                                        (peer->localToGlobal (ScalingHelpers::scaledScreenPosToUnscaled (comp, pointInLocalSpace)));
-            else
+            if (comp.isOnDesktop())
+            {
+                if (auto* peer = comp.getPeer())
+                    return ScalingHelpers::unscaledScreenPosToScaled (peer->localToGlobal (ScalingHelpers::scaledScreenPosToUnscaled (comp, pointInLocalSpace)));
+
                 jassertfalse;
-        }
-        else
-        {
-            pointInLocalSpace = ScalingHelpers::addPosition (pointInLocalSpace, comp);
-        }
+                return pointInLocalSpace;
+            }
 
-        if (comp.affineTransform != nullptr)
-            pointInLocalSpace = pointInLocalSpace.transformedBy (*comp.affineTransform);
+            if (comp.getParentComponent() == nullptr)
+                return ScalingHelpers::unscaledScreenPosToScaled (ScalingHelpers::scaledScreenPosToUnscaled (comp, ScalingHelpers::addPosition (pointInLocalSpace, comp)));
 
-        return pointInLocalSpace;
+            return ScalingHelpers::addPosition (pointInLocalSpace, comp);
+        }();
+
+        return comp.affineTransform != nullptr ? preTransform.transformedBy (*comp.affineTransform)
+                                               : preTransform;
     }
 
     template <typename PointOrRect>
@@ -381,7 +405,9 @@ struct Component::ComponentHelpers
         if (directParent == parent)
             return convertFromParentSpace (target, coordInParent);
 
+        JUCE_BEGIN_IGNORE_WARNINGS_MSVC (6011)
         return convertFromParentSpace (target, convertFromDistantParentSpace (parent, *directParent, coordInParent));
+        JUCE_END_IGNORE_WARNINGS_MSVC
     }
 
     template <typename PointOrRect>
@@ -392,8 +418,12 @@ struct Component::ComponentHelpers
             if (source == target)
                 return p;
 
+            JUCE_BEGIN_IGNORE_WARNINGS_MSVC (6011)
+
             if (source->isParentOf (target))
                 return convertFromDistantParentSpace (source, *target, p);
+
+            JUCE_END_IGNORE_WARNINGS_MSVC
 
             p = convertToParentSpace (*source, p);
             source = source->getParentComponent();
@@ -463,6 +493,24 @@ struct Component::ComponentHelpers
         for (auto* child : c.childComponentList)
             releaseAllCachedImageResources (*child);
     }
+
+    //==============================================================================
+    static bool modalWouldBlockComponent (const Component& maybeBlocked, Component* modal)
+    {
+        return modal != nullptr
+            && modal != &maybeBlocked
+            && ! modal->isParentOf (&maybeBlocked)
+            && ! modal->canModalEventBeSentToComponent (&maybeBlocked);
+    }
+
+    template <typename Function>
+    static void sendMouseEventToComponentsThatAreBlockedByModal (Component& modal, Function&& function)
+    {
+        for (auto& ms : Desktop::getInstance().getMouseSources())
+            if (auto* c = ms.getComponentUnderMouse())
+                if (modalWouldBlockComponent (*c, &modal))
+                    (c->*function) (ms, ms.getScreenPosition(), Time::getCurrentTime());
+    }
 };
 
 //==============================================================================
@@ -482,15 +530,15 @@ Component::~Component()
 
     componentListeners.call ([this] (ComponentListener& l) { l.componentBeingDeleted (*this); });
 
-    masterReference.clear();
-
     while (childComponentList.size() > 0)
         removeChildComponent (childComponentList.size() - 1, false, true);
 
+    masterReference.clear();
+
     if (parentComponent != nullptr)
         parentComponent->removeChildComponent (parentComponent->childComponentList.indexOf (this), true, false);
-    else if (hasKeyboardFocus (true))
-        giveAwayFocus (currentlyFocusedComponent != this);
+    else
+        giveAwayKeyboardFocusInternal (isParentOf (currentlyFocusedComponent));
 
     if (flags.hasHeavyweightPeerFlag)
         removeFromDesktop();
@@ -551,8 +599,8 @@ void Component::setVisible (bool shouldBeVisible)
                 if (parentComponent != nullptr)
                     parentComponent->grabKeyboardFocus();
 
-                if (hasKeyboardFocus (true))
-                    giveAwayFocus (true);
+                // ensure that keyboard focus is given away if it wasn't taken by parent
+                giveAwayKeyboardFocus();
             }
         }
 
@@ -626,7 +674,7 @@ void Component::addToDesktop (int styleWanted, void* nativeWindowToAttachTo)
     {
         const WeakReference<Component> safePointer (this);
 
-       #if JUCE_LINUX
+       #if JUCE_LINUX || JUCE_BSD
         // it's wise to give the component a non-zero size before
         // putting it on the desktop, as X windows get confused by this, and
         // a (1, 1) minimum size is enforced here.
@@ -634,7 +682,8 @@ void Component::addToDesktop (int styleWanted, void* nativeWindowToAttachTo)
                  jmax (1, getHeight()));
        #endif
 
-        auto topLeft = getScreenPosition();
+        const auto unscaledPosition = ScalingHelpers::scaledScreenPosToUnscaled (getScreenPosition());
+        const auto topLeft = ScalingHelpers::unscaledScreenPosToScaled (*this, unscaledPosition);
 
         bool wasFullscreen = false;
         bool wasMinimised = false;
@@ -704,6 +753,9 @@ void Component::addToDesktop (int styleWanted, void* nativeWindowToAttachTo)
 
             repaint();
             internalHierarchyChanged();
+
+            if (auto* handler = getAccessibilityHandler())
+                notifyAccessibilityEventInternal (*handler, InternalAccessibilityEvent::windowOpened);
         }
     }
 }
@@ -716,6 +768,9 @@ void Component::removeFromDesktop()
 
     if (flags.hasHeavyweightPeerFlag)
     {
+        if (auto* handler = getAccessibilityHandler())
+            notifyAccessibilityEventInternal (*handler, InternalAccessibilityEvent::windowClosed);
+
         ComponentHelpers::releaseAllCachedImageResources (*this);
 
         auto* peer = ComponentPeer::getPeerFor (this);
@@ -886,7 +941,7 @@ void Component::reorderChildInternal (int sourceIndex, int destIndex)
     }
 }
 
-void Component::toFront (bool setAsForeground)
+void Component::toFront (bool shouldGrabKeyboardFocus)
 {
     // if component methods are being called from threads other than the message
     // thread, you'll need to use a MessageManagerLock object to make sure it's thread-safe.
@@ -896,9 +951,9 @@ void Component::toFront (bool setAsForeground)
     {
         if (auto* peer = getPeer())
         {
-            peer->toFront (setAsForeground);
+            peer->toFront (shouldGrabKeyboardFocus);
 
-            if (setAsForeground && ! hasKeyboardFocus (true))
+            if (shouldGrabKeyboardFocus && ! hasKeyboardFocus (true))
                 grabKeyboardFocus();
         }
     }
@@ -926,7 +981,7 @@ void Component::toFront (bool setAsForeground)
             }
         }
 
-        if (setAsForeground)
+        if (shouldGrabKeyboardFocus)
         {
             internalBroughtToFront();
 
@@ -1188,6 +1243,10 @@ void Component::sendMovedResizedMessages (bool wasMoved, bool wasResized)
             l.componentMovedOrResized (*this, wasMoved, wasResized);
         });
     }
+
+    if ((wasMoved || wasResized) && ! checker.shouldBailOut())
+        if (auto* handler = getAccessibilityHandler())
+            notifyAccessibilityEventInternal (*handler, InternalAccessibilityEvent::elementMovedOrResized);
 }
 
 void Component::setSize (int w, int h)                  { setBounds (getX(), getY(), w, h); }
@@ -1340,7 +1399,7 @@ bool Component::hitTest (int x, int y)
             auto& child = *childComponentList.getUnchecked (i);
 
             if (child.isVisible()
-                 && ComponentHelpers::hitTest (child, ComponentHelpers::convertFromParentSpace (child, Point<int> (x, y))))
+                 && ComponentHelpers::hitTest (child, ComponentHelpers::convertFromParentSpace (child, Point<int> (x, y).toFloat())))
                 return true;
         }
     }
@@ -1364,6 +1423,11 @@ void Component::getInterceptsMouseClicks (bool& allowsClicksOnThisComponent,
 
 bool Component::contains (Point<int> point)
 {
+    return contains (point.toFloat());
+}
+
+bool Component::contains (Point<float> point)
+{
     if (ComponentHelpers::hitTest (*this, point))
     {
         if (parentComponent != nullptr)
@@ -1371,13 +1435,18 @@ bool Component::contains (Point<int> point)
 
         if (flags.hasHeavyweightPeerFlag)
             if (auto* peer = getPeer())
-                return peer->contains (ComponentHelpers::localPositionToRawPeerPos (*this, point), true);
+                return peer->contains (ComponentHelpers::localPositionToRawPeerPos (*this, point).roundToInt(), true);
     }
 
     return false;
 }
 
 bool Component::reallyContains (Point<int> point, bool returnTrueIfWithinAChild)
+{
+    return reallyContains (point.toFloat(), returnTrueIfWithinAChild);
+}
+
+bool Component::reallyContains (Point<float> point, bool returnTrueIfWithinAChild)
 {
     if (! contains (point))
         return false;
@@ -1390,11 +1459,16 @@ bool Component::reallyContains (Point<int> point, bool returnTrueIfWithinAChild)
 
 Component* Component::getComponentAt (Point<int> position)
 {
+    return getComponentAt (position.toFloat());
+}
+
+Component* Component::getComponentAt (Point<float> position)
+{
     if (flags.visibleFlag && ComponentHelpers::hitTest (*this, position))
     {
         for (int i = childComponentList.size(); --i >= 0;)
         {
-            auto* child = childComponentList.getUnchecked(i);
+            auto* child = childComponentList.getUnchecked (i);
 
             child = child->getComponentAt (ComponentHelpers::convertFromParentSpace (*child, position));
 
@@ -1410,7 +1484,7 @@ Component* Component::getComponentAt (Point<int> position)
 
 Component* Component::getComponentAt (int x, int y)
 {
-    return getComponentAt ({ x, y });
+    return getComponentAt (Point<int> { x, y });
 }
 
 //==============================================================================
@@ -1498,9 +1572,7 @@ Component* Component::removeChildComponent (int index, bool sendParentEvents, bo
     // thread, you'll need to use a MessageManagerLock object to make sure it's thread-safe.
     JUCE_ASSERT_MESSAGE_MANAGER_IS_LOCKED_OR_OFFSCREEN
 
-    auto* child = childComponentList [index];
-
-    if (child != nullptr)
+    if (auto* child = childComponentList [index])
     {
         sendParentEvents = sendParentEvents && child->isShowing();
 
@@ -1518,22 +1590,18 @@ Component* Component::removeChildComponent (int index, bool sendParentEvents, bo
         ComponentHelpers::releaseAllCachedImageResources (*child);
 
         // (NB: there are obscure situations where child->isShowing() = false, but it still has the focus)
-        if (currentlyFocusedComponent == child || child->isParentOf (currentlyFocusedComponent))
+        if (child->hasKeyboardFocus (true))
         {
+            const WeakReference<Component> safeThis (this);
+
+            child->giveAwayKeyboardFocusInternal (sendChildEvents || currentlyFocusedComponent != child);
+
             if (sendParentEvents)
             {
-                const WeakReference<Component> thisPointer (this);
-
-                giveAwayFocus (sendChildEvents || currentlyFocusedComponent != child);
-
-                if (thisPointer == nullptr)
+                if (safeThis == nullptr)
                     return child;
 
                 grabKeyboardFocus();
-            }
-            else
-            {
-                giveAwayFocus (sendChildEvents || currentlyFocusedComponent != child);
             }
         }
 
@@ -1542,9 +1610,11 @@ Component* Component::removeChildComponent (int index, bool sendParentEvents, bo
 
         if (sendParentEvents)
             internalChildrenChanged();
+
+        return child;
     }
 
-    return child;
+    return nullptr;
 }
 
 //==============================================================================
@@ -1656,6 +1726,10 @@ void Component::internalHierarchyChanged()
 
         i = jmin (i, childComponentList.size());
     }
+
+    if (flags.hasHeavyweightPeerFlag)
+        if (auto* handler = getAccessibilityHandler())
+            handler->notifyAccessibilityEvent (AccessibilityEvent::structureChanged);
 }
 
 //==============================================================================
@@ -1687,6 +1761,11 @@ void Component::enterModalState (bool shouldTakeKeyboardFocus,
 
     if (! isCurrentlyModal (false))
     {
+        // While this component is in modal state it may block other components from receiving
+        // mouseExit events. To keep mouseEnter and mouseExit calls balanced on these components,
+        // we must manually force the mouse to "leave" blocked components.
+        ComponentHelpers::sendMouseEventToComponentsThatAreBlockedByModal (*this, &Component::internalMouseExit);
+
         auto& mcm = *ModalComponentManager::getInstance();
         mcm.startModal (this, deleteWhenDismissed);
         mcm.attachCallback (this, callback);
@@ -1705,6 +1784,8 @@ void Component::enterModalState (bool shouldTakeKeyboardFocus,
 
 void Component::exitModalState (int returnValue)
 {
+    WeakReference<Component> deletionChecker (this);
+
     if (isCurrentlyModal (false))
     {
         if (MessageManager::getInstance()->isThisTheMessageThread())
@@ -1713,19 +1794,18 @@ void Component::exitModalState (int returnValue)
             mcm.endModal (this, returnValue);
             mcm.bringModalComponentsToFront();
 
-            // If any of the mouse sources are over another Component when we exit the modal state then send a mouse enter event
-            for (auto& ms : Desktop::getInstance().getMouseSources())
-                if (auto* c = ms.getComponentUnderMouse())
-                    c->internalMouseEnter (ms, ms.getScreenPosition(), Time::getCurrentTime());
+            // While this component is in modal state it may block other components from receiving
+            // mouseEnter events. To keep mouseEnter and mouseExit calls balanced on these components,
+            // we must manually force the mouse to "enter" blocked components.
+            if (deletionChecker != nullptr)
+                ComponentHelpers::sendMouseEventToComponentsThatAreBlockedByModal (*deletionChecker, &Component::internalMouseEnter);
         }
         else
         {
-            WeakReference<Component> target (this);
-
-            MessageManager::callAsync ([=]
+            MessageManager::callAsync ([target = WeakReference<Component> { this }, returnValue]
             {
-                if (auto* c = target.get())
-                    c->exitModalState (returnValue);
+                if (target != nullptr)
+                    target->exitModalState (returnValue);
             });
         }
     }
@@ -1741,10 +1821,7 @@ bool Component::isCurrentlyModal (bool onlyConsiderForemostModalComponent) const
 
 bool Component::isCurrentlyBlockedByAnotherModalComponent() const
 {
-    auto* mc = getCurrentlyModalComponent();
-
-    return ! (mc == nullptr || mc == this || mc->isParentOf (this)
-               || mc->canModalEventBeSentToComponent (this));
+    return ComponentHelpers::modalWouldBlockComponent (*this, getCurrentlyModalComponent());
 }
 
 int JUCE_CALLTYPE Component::getNumCurrentlyModalComponents() noexcept
@@ -2215,16 +2292,16 @@ void Component::mouseDoubleClick (const MouseEvent&)    {}
 
 void Component::mouseWheelMove (const MouseEvent& e, const MouseWheelDetails& wheel)
 {
-    // the base class just passes this event up to its parent..
-    if (parentComponent != nullptr)
-        parentComponent->mouseWheelMove (e.getEventRelativeTo (parentComponent), wheel);
+    // the base class just passes this event up to the nearest enabled ancestor
+    if (auto* enabledComponent = findFirstEnabledAncestor (getParentComponent()))
+        enabledComponent->mouseWheelMove (e.getEventRelativeTo (enabledComponent), wheel);
 }
 
 void Component::mouseMagnify (const MouseEvent& e, float magnifyAmount)
 {
-    // the base class just passes this event up to its parent..
-    if (parentComponent != nullptr)
-        parentComponent->mouseMagnify (e.getEventRelativeTo (parentComponent), magnifyAmount);
+    // the base class just passes this event up to the nearest enabled ancestor
+    if (auto* enabledComponent = findFirstEnabledAncestor (getParentComponent()))
+        enabledComponent->mouseMagnify (e.getEventRelativeTo (enabledComponent), magnifyAmount);
 }
 
 //==============================================================================
@@ -2273,12 +2350,10 @@ void Component::internalModalInputAttempt()
 //==============================================================================
 void Component::postCommandMessage (int commandID)
 {
-    WeakReference<Component> target (this);
-
-    MessageManager::callAsync ([=]
+    MessageManager::callAsync ([target = WeakReference<Component> { this }, commandID]
     {
-        if (auto* c = target.get())
-            c->handleCommandMessage (commandID);
+        if (target != nullptr)
+            target->handleCommandMessage (commandID);
     });
 }
 
@@ -2330,11 +2405,19 @@ void Component::internalMouseEnter (MouseInputSource source, Point<float> relati
 
     BailOutChecker checker (this);
 
-    const MouseEvent me (source, relativePos, source.getCurrentModifiers(), MouseInputSource::invalidPressure,
-                         MouseInputSource::invalidOrientation, MouseInputSource::invalidRotation,
-                         MouseInputSource::invalidTiltX, MouseInputSource::invalidTiltY,
-                         this, this, time, relativePos, time, 0, false);
+    const auto me = makeMouseEvent (source,
+                                    PointerState().withPosition (relativePos),
+                                    source.getCurrentModifiers(),
+                                    this,
+                                    this,
+                                    time,
+                                    relativePos,
+                                    time,
+                                    0,
+                                    false);
     mouseEnter (me);
+
+    flags.cachedMouseInsideComponent = true;
 
     if (checker.shouldBailOut())
         return;
@@ -2356,12 +2439,20 @@ void Component::internalMouseExit (MouseInputSource source, Point<float> relativ
     if (flags.repaintOnMouseActivityFlag)
         repaint();
 
+    flags.cachedMouseInsideComponent = false;
+
     BailOutChecker checker (this);
 
-    const MouseEvent me (source, relativePos, source.getCurrentModifiers(), MouseInputSource::invalidPressure,
-                         MouseInputSource::invalidOrientation, MouseInputSource::invalidRotation,
-                         MouseInputSource::invalidTiltX, MouseInputSource::invalidTiltY,
-                         this, this, time, relativePos, time, 0, false);
+    const auto me = makeMouseEvent (source,
+                                    PointerState().withPosition (relativePos),
+                                    source.getCurrentModifiers(),
+                                    this,
+                                    this,
+                                    time,
+                                    relativePos,
+                                    time,
+                                    0,
+                                    false);
 
     mouseExit (me);
 
@@ -2373,8 +2464,7 @@ void Component::internalMouseExit (MouseInputSource source, Point<float> relativ
     MouseListenerList::template sendMouseEvent<const MouseEvent&> (*this, checker, &MouseListener::mouseExit, me);
 }
 
-void Component::internalMouseDown (MouseInputSource source, Point<float> relativePos, Time time,
-                                   float pressure, float orientation, float rotation, float tiltX, float tiltY)
+void Component::internalMouseDown (MouseInputSource source, const PointerState& relativePointerState, Time time)
 {
     auto& desktop = Desktop::getInstance();
     BailOutChecker checker (this);
@@ -2392,9 +2482,16 @@ void Component::internalMouseDown (MouseInputSource source, Point<float> relativ
         if (isCurrentlyBlockedByAnotherModalComponent())
         {
             // allow blocked mouse-events to go to global listeners..
-            const MouseEvent me (source, relativePos, source.getCurrentModifiers(), pressure,
-                                 orientation, rotation, tiltX, tiltY, this, this, time, relativePos,
-                                 time, source.getNumberOfMultipleClicks(), false);
+            const auto me = makeMouseEvent (source,
+                                            relativePointerState,
+                                            source.getCurrentModifiers(),
+                                            this,
+                                            this,
+                                            time,
+                                            relativePointerState.position,
+                                            time,
+                                            source.getNumberOfMultipleClicks(),
+                                            false);
 
             desktop.getMouseListeners().callChecked (checker, [&] (MouseListener& l) { l.mouseDown (me); });
             return;
@@ -2416,7 +2513,7 @@ void Component::internalMouseDown (MouseInputSource source, Point<float> relativ
 
     if (! flags.dontFocusOnMouseClickFlag)
     {
-        grabFocusInternal (focusChangedByMouseClick, true);
+        grabKeyboardFocusInternal (focusChangedByMouseClick, true);
 
         if (checker.shouldBailOut())
             return;
@@ -2425,9 +2522,16 @@ void Component::internalMouseDown (MouseInputSource source, Point<float> relativ
     if (flags.repaintOnMouseActivityFlag)
         repaint();
 
-    const MouseEvent me (source, relativePos, source.getCurrentModifiers(), pressure,
-                         orientation, rotation, tiltX, tiltY, this, this, time, relativePos,
-                         time, source.getNumberOfMultipleClicks(), false);
+    const auto me = makeMouseEvent (source,
+                                    relativePointerState,
+                                    source.getCurrentModifiers(),
+                                    this,
+                                    this,
+                                    time,
+                                    relativePointerState.position,
+                                    time,
+                                    source.getNumberOfMultipleClicks(),
+                                    false);
     mouseDown (me);
 
     if (checker.shouldBailOut())
@@ -2438,8 +2542,7 @@ void Component::internalMouseDown (MouseInputSource source, Point<float> relativ
     MouseListenerList::template sendMouseEvent<const MouseEvent&> (*this, checker, &MouseListener::mouseDown, me);
 }
 
-void Component::internalMouseUp (MouseInputSource source, Point<float> relativePos, Time time,
-                                 const ModifierKeys oldModifiers, float pressure, float orientation, float rotation, float tiltX, float tiltY)
+void Component::internalMouseUp (MouseInputSource source, const PointerState& relativePointerState, Time time, const ModifierKeys oldModifiers)
 {
     if (flags.mouseDownWasBlocked && isCurrentlyBlockedByAnotherModalComponent())
         return;
@@ -2449,12 +2552,16 @@ void Component::internalMouseUp (MouseInputSource source, Point<float> relativeP
     if (flags.repaintOnMouseActivityFlag)
         repaint();
 
-    const MouseEvent me (source, relativePos, oldModifiers, pressure, orientation,
-                         rotation, tiltX, tiltY, this, this, time,
-                         getLocalPoint (nullptr, source.getLastMouseDownPosition()),
-                         source.getLastMouseDownTime(),
-                         source.getNumberOfMultipleClicks(),
-                         source.isLongPressOrDrag());
+    const auto me = makeMouseEvent (source,
+                                    relativePointerState,
+                                    oldModifiers,
+                                    this,
+                                    this,
+                                    time,
+                                    getLocalPoint (nullptr, source.getLastMouseDownPosition()),
+                                    source.getLastMouseDownTime(),
+                                    source.getNumberOfMultipleClicks(),
+                                    source.isLongPressOrDrag());
     mouseUp (me);
 
     if (checker.shouldBailOut())
@@ -2481,19 +2588,22 @@ void Component::internalMouseUp (MouseInputSource source, Point<float> relativeP
     }
 }
 
-void Component::internalMouseDrag (MouseInputSource source, Point<float> relativePos, Time time,
-                                   float pressure, float orientation, float rotation, float tiltX, float tiltY)
+void Component::internalMouseDrag (MouseInputSource source, const PointerState& relativePointerState, Time time)
 {
     if (! isCurrentlyBlockedByAnotherModalComponent())
     {
         BailOutChecker checker (this);
 
-        const MouseEvent me (source, relativePos, source.getCurrentModifiers(),
-                             pressure, orientation, rotation, tiltX, tiltY, this, this, time,
-                             getLocalPoint (nullptr, source.getLastMouseDownPosition()),
-                             source.getLastMouseDownTime(),
-                             source.getNumberOfMultipleClicks(),
-                             source.isLongPressOrDrag());
+        const auto me = makeMouseEvent (source,
+                                        relativePointerState,
+                                        source.getCurrentModifiers(),
+                                        this,
+                                        this,
+                                        time,
+                                        getLocalPoint (nullptr, source.getLastMouseDownPosition()),
+                                        source.getLastMouseDownTime(),
+                                        source.getNumberOfMultipleClicks(),
+                                        source.isLongPressOrDrag());
         mouseDrag (me);
 
         if (checker.shouldBailOut())
@@ -2518,10 +2628,16 @@ void Component::internalMouseMove (MouseInputSource source, Point<float> relativ
     {
         BailOutChecker checker (this);
 
-        const MouseEvent me (source, relativePos, source.getCurrentModifiers(), MouseInputSource::invalidPressure,
-                             MouseInputSource::invalidOrientation, MouseInputSource::invalidRotation,
-                             MouseInputSource::invalidTiltX, MouseInputSource::invalidTiltY,
-                             this, this, time, relativePos, time, 0, false);
+        const auto me = makeMouseEvent (source,
+                                        PointerState().withPosition (relativePos),
+                                        source.getCurrentModifiers(),
+                                        this,
+                                        this,
+                                        time,
+                                        relativePos,
+                                        time,
+                                        0,
+                                        false);
         mouseMove (me);
 
         if (checker.shouldBailOut())
@@ -2539,10 +2655,16 @@ void Component::internalMouseWheel (MouseInputSource source, Point<float> relati
     auto& desktop = Desktop::getInstance();
     BailOutChecker checker (this);
 
-    const MouseEvent me (source, relativePos, source.getCurrentModifiers(), MouseInputSource::invalidPressure,
-                         MouseInputSource::invalidOrientation, MouseInputSource::invalidRotation,
-                         MouseInputSource::invalidTiltX, MouseInputSource::invalidTiltY,
-                         this, this, time, relativePos, time, 0, false);
+    const auto me = makeMouseEvent (source,
+                                    PointerState().withPosition (relativePos),
+                                    source.getCurrentModifiers(),
+                                    this,
+                                    this,
+                                    time,
+                                    relativePos,
+                                    time,
+                                    0,
+                                    false);
 
     if (isCurrentlyBlockedByAnotherModalComponent())
     {
@@ -2569,10 +2691,16 @@ void Component::internalMagnifyGesture (MouseInputSource source, Point<float> re
     auto& desktop = Desktop::getInstance();
     BailOutChecker checker (this);
 
-    const MouseEvent me (source, relativePos, source.getCurrentModifiers(), MouseInputSource::invalidPressure,
-                         MouseInputSource::invalidOrientation, MouseInputSource::invalidRotation,
-                         MouseInputSource::invalidTiltX, MouseInputSource::invalidTiltY,
-                         this, this, time, relativePos, time, 0, false);
+    const auto me = makeMouseEvent (source,
+                                    PointerState().withPosition (relativePos),
+                                    source.getCurrentModifiers(),
+                                    this,
+                                    this,
+                                    time,
+                                    relativePos,
+                                    time,
+                                    0,
+                                    false);
 
     if (isCurrentlyBlockedByAnotherModalComponent())
     {
@@ -2644,36 +2772,52 @@ void Component::focusGained (FocusChangeType)   {}
 void Component::focusLost (FocusChangeType)     {}
 void Component::focusOfChildComponentChanged (FocusChangeType) {}
 
-void Component::internalFocusGain (FocusChangeType cause)
+void Component::internalKeyboardFocusGain (FocusChangeType cause)
 {
-    internalFocusGain (cause, WeakReference<Component> (this));
+    internalKeyboardFocusGain (cause, WeakReference<Component> (this));
 }
 
-void Component::internalFocusGain (FocusChangeType cause, const WeakReference<Component>& safePointer)
+void Component::internalKeyboardFocusGain (FocusChangeType cause,
+                                           const WeakReference<Component>& safePointer)
 {
     focusGained (cause);
 
-    if (safePointer != nullptr)
-        internalChildFocusChange (cause, safePointer);
+    if (safePointer == nullptr)
+        return;
+
+    if (hasKeyboardFocus (false))
+        if (auto* handler = getAccessibilityHandler())
+            handler->grabFocus();
+
+    if (safePointer == nullptr)
+        return;
+
+    internalChildKeyboardFocusChange (cause, safePointer);
 }
 
-void Component::internalFocusLoss (FocusChangeType cause)
+void Component::internalKeyboardFocusLoss (FocusChangeType cause)
 {
     const WeakReference<Component> safePointer (this);
 
     focusLost (cause);
 
     if (safePointer != nullptr)
-        internalChildFocusChange (cause, safePointer);
+    {
+        if (auto* handler = getAccessibilityHandler())
+            handler->giveAwayFocus();
+
+        internalChildKeyboardFocusChange (cause, safePointer);
+    }
 }
 
-void Component::internalChildFocusChange (FocusChangeType cause, const WeakReference<Component>& safePointer)
+void Component::internalChildKeyboardFocusChange (FocusChangeType cause,
+                                                  const WeakReference<Component>& safePointer)
 {
-    const bool childIsNowFocused = hasKeyboardFocus (true);
+    const bool childIsNowKeyboardFocused = hasKeyboardFocus (true);
 
-    if (flags.childCompFocusedFlag != childIsNowFocused)
+    if (flags.childKeyboardFocusedFlag != childIsNowKeyboardFocused)
     {
-        flags.childCompFocusedFlag = childIsNowFocused;
+        flags.childKeyboardFocusedFlag = childIsNowKeyboardFocused;
 
         focusOfChildComponentChanged (cause);
 
@@ -2682,12 +2826,12 @@ void Component::internalChildFocusChange (FocusChangeType cause, const WeakRefer
     }
 
     if (parentComponent != nullptr)
-        parentComponent->internalChildFocusChange (cause, WeakReference<Component> (parentComponent));
+        parentComponent->internalChildKeyboardFocusChange (cause, parentComponent);
 }
 
 void Component::setWantsKeyboardFocus (bool wantsFocus) noexcept
 {
-    flags.wantsFocusFlag = wantsFocus;
+    flags.wantsKeyboardFocusFlag = wantsFocus;
 }
 
 void Component::setMouseClickGrabsKeyboardFocus (bool shouldGrabFocus)
@@ -2702,17 +2846,49 @@ bool Component::getMouseClickGrabsKeyboardFocus() const noexcept
 
 bool Component::getWantsKeyboardFocus() const noexcept
 {
-    return flags.wantsFocusFlag && ! flags.isDisabledFlag;
+    return flags.wantsKeyboardFocusFlag && ! flags.isDisabledFlag;
 }
 
-void Component::setFocusContainer (bool shouldBeFocusContainer) noexcept
+void Component::setFocusContainerType (FocusContainerType containerType) noexcept
 {
-    flags.isFocusContainerFlag = shouldBeFocusContainer;
+    flags.isFocusContainerFlag = (containerType == FocusContainerType::focusContainer
+                                  || containerType == FocusContainerType::keyboardFocusContainer);
+
+    flags.isKeyboardFocusContainerFlag = (containerType == FocusContainerType::keyboardFocusContainer);
 }
 
 bool Component::isFocusContainer() const noexcept
 {
     return flags.isFocusContainerFlag;
+}
+
+bool Component::isKeyboardFocusContainer() const noexcept
+{
+    return flags.isKeyboardFocusContainerFlag;
+}
+
+template <typename FocusContainerFn>
+static Component* findContainer (const Component* child, FocusContainerFn isFocusContainer)
+{
+    if (auto* parent = child->getParentComponent())
+    {
+        if ((parent->*isFocusContainer)() || parent->getParentComponent() == nullptr)
+            return parent;
+
+        return findContainer (parent, isFocusContainer);
+    }
+
+    return nullptr;
+}
+
+Component* Component::findFocusContainer() const
+{
+    return findContainer (this, &Component::isFocusContainer);
+}
+
+Component* Component::findKeyboardFocusContainer() const
+{
+    return findContainer (this, &Component::isKeyboardFocusContainer);
 }
 
 static const Identifier juce_explicitFocusOrderId ("_jexfo");
@@ -2727,85 +2903,78 @@ void Component::setExplicitFocusOrder (int newFocusOrderIndex)
     properties.set (juce_explicitFocusOrderId, newFocusOrderIndex);
 }
 
-KeyboardFocusTraverser* Component::createFocusTraverser()
+std::unique_ptr<ComponentTraverser> Component::createFocusTraverser()
 {
     if (flags.isFocusContainerFlag || parentComponent == nullptr)
-        return new KeyboardFocusTraverser();
+        return std::make_unique<FocusTraverser>();
 
     return parentComponent->createFocusTraverser();
 }
 
+std::unique_ptr<ComponentTraverser> Component::createKeyboardFocusTraverser()
+{
+    if (flags.isKeyboardFocusContainerFlag || parentComponent == nullptr)
+        return std::make_unique<KeyboardFocusTraverser>();
+
+    return parentComponent->createKeyboardFocusTraverser();
+}
+
 void Component::takeKeyboardFocus (FocusChangeType cause)
 {
-    // give the focus to this component
-    if (currentlyFocusedComponent != this)
+    if (currentlyFocusedComponent == this)
+        return;
+
+    if (auto* peer = getPeer())
     {
-        // get the focus onto our desktop window
-        if (auto* peer = getPeer())
-        {
-            const WeakReference<Component> safePointer (this);
-            peer->grabFocus();
+        const WeakReference<Component> safePointer (this);
+        peer->grabFocus();
 
-            if (peer->isFocused() && currentlyFocusedComponent != this)
-            {
-                WeakReference<Component> componentLosingFocus (currentlyFocusedComponent);
-                currentlyFocusedComponent = this;
+        if (! peer->isFocused() || currentlyFocusedComponent == this)
+            return;
 
-                Desktop::getInstance().triggerFocusCallback();
+        WeakReference<Component> componentLosingFocus (currentlyFocusedComponent);
+        currentlyFocusedComponent = this;
 
-                // call this after setting currentlyFocusedComponent so that the one that's
-                // losing it has a chance to see where focus is going
-                if (componentLosingFocus != nullptr)
-                    componentLosingFocus->internalFocusLoss (cause);
+        Desktop::getInstance().triggerFocusCallback();
 
-                if (currentlyFocusedComponent == this)
-                    internalFocusGain (cause, safePointer);
-            }
-        }
+        // call this after setting currentlyFocusedComponent so that the one that's
+        // losing it has a chance to see where focus is going
+        if (componentLosingFocus != nullptr)
+            componentLosingFocus->internalKeyboardFocusLoss (cause);
+
+        if (currentlyFocusedComponent == this)
+            internalKeyboardFocusGain (cause, safePointer);
     }
 }
 
-void Component::grabFocusInternal (FocusChangeType cause, bool canTryParent)
+void Component::grabKeyboardFocusInternal (FocusChangeType cause, bool canTryParent)
 {
-    if (isShowing())
+    if (! isShowing())
+        return;
+
+    if (flags.wantsKeyboardFocusFlag
+        && (isEnabled() || parentComponent == nullptr))
     {
-        if (flags.wantsFocusFlag && (isEnabled() || parentComponent == nullptr))
+        takeKeyboardFocus (cause);
+        return;
+    }
+
+    if (isParentOf (currentlyFocusedComponent) && currentlyFocusedComponent->isShowing())
+        return;
+
+    if (auto traverser = createKeyboardFocusTraverser())
+    {
+        if (auto* defaultComp = traverser->getDefaultComponent (this))
         {
-            takeKeyboardFocus (cause);
-        }
-        else
-        {
-            if (isParentOf (currentlyFocusedComponent)
-                 && currentlyFocusedComponent->isShowing())
-            {
-                // do nothing if the focused component is actually a child of ours..
-            }
-            else
-            {
-                // find the default child component..
-                std::unique_ptr<KeyboardFocusTraverser> traverser (createFocusTraverser());
-
-                if (traverser != nullptr)
-                {
-                    auto* defaultComp = traverser->getDefaultComponent (this);
-                    traverser.reset();
-
-                    if (defaultComp != nullptr)
-                    {
-                        defaultComp->grabFocusInternal (cause, false);
-                        return;
-                    }
-                }
-
-                if (canTryParent && parentComponent != nullptr)
-                {
-                    // if no children want it and we're allowed to try our parent comp,
-                    // then pass up to parent, which will try our siblings.
-                    parentComponent->grabFocusInternal (cause, true);
-                }
-            }
+            defaultComp->grabKeyboardFocusInternal (cause, false);
+            return;
         }
     }
+
+    // if no children want it and we're allowed to try our parent comp,
+    // then pass up to parent, which will try our siblings.
+    if (canTryParent && parentComponent != nullptr)
+        parentComponent->grabKeyboardFocusInternal (cause, true);
 }
 
 void Component::grabKeyboardFocus()
@@ -2814,13 +2983,38 @@ void Component::grabKeyboardFocus()
     // thread, you'll need to use a MessageManagerLock object to make sure it's thread-safe.
     JUCE_ASSERT_MESSAGE_MANAGER_IS_LOCKED
 
-    grabFocusInternal (focusChangedDirectly, true);
+    grabKeyboardFocusInternal (focusChangedDirectly, true);
 
     // A component can only be focused when it's actually on the screen!
     // If this fails then you're probably trying to grab the focus before you've
     // added the component to a parent or made it visible. Or maybe one of its parent
     // components isn't yet visible.
     jassert (isShowing() || isOnDesktop());
+}
+
+void Component::giveAwayKeyboardFocusInternal (bool sendFocusLossEvent)
+{
+    if (hasKeyboardFocus (true))
+    {
+        if (auto* componentLosingFocus = currentlyFocusedComponent)
+        {
+            currentlyFocusedComponent = nullptr;
+
+            if (sendFocusLossEvent && componentLosingFocus != nullptr)
+                componentLosingFocus->internalKeyboardFocusLoss (focusChangedDirectly);
+
+            Desktop::getInstance().triggerFocusCallback();
+        }
+    }
+}
+
+void Component::giveAwayKeyboardFocus()
+{
+    // if component methods are being called from threads other than the message
+    // thread, you'll need to use a MessageManagerLock object to make sure it's thread-safe.
+    JUCE_ASSERT_MESSAGE_MANAGER_IS_LOCKED
+
+    giveAwayKeyboardFocusInternal (true);
 }
 
 void Component::moveKeyboardFocusToSibling (bool moveToNext)
@@ -2831,15 +3025,27 @@ void Component::moveKeyboardFocusToSibling (bool moveToNext)
 
     if (parentComponent != nullptr)
     {
-        std::unique_ptr<KeyboardFocusTraverser> traverser (createFocusTraverser());
-
-        if (traverser != nullptr)
+        if (auto traverser = createKeyboardFocusTraverser())
         {
-            auto* nextComp = moveToNext ? traverser->getNextComponent (this)
-                                        : traverser->getPreviousComponent (this);
-            traverser.reset();
+            auto findComponentToFocus = [&]() -> Component*
+            {
+                if (auto* comp = (moveToNext ? traverser->getNextComponent (this)
+                                             : traverser->getPreviousComponent (this)))
+                    return comp;
 
-            if (nextComp != nullptr)
+                if (auto* focusContainer = findKeyboardFocusContainer())
+                {
+                    auto allFocusableComponents = traverser->getAllComponents (focusContainer);
+
+                    if (! allFocusableComponents.empty())
+                        return moveToNext ? allFocusableComponents.front()
+                                          : allFocusableComponents.back();
+                }
+
+                return nullptr;
+            };
+
+            if (auto* nextComp = findComponentToFocus())
             {
                 if (nextComp->isCurrentlyBlockedByAnotherModalComponent())
                 {
@@ -2850,7 +3056,7 @@ void Component::moveKeyboardFocusToSibling (bool moveToNext)
                         return;
                 }
 
-                nextComp->grabFocusInternal (focusChangedByTabKey, true);
+                nextComp->grabKeyboardFocusInternal (focusChangedByTabKey, true);
                 return;
             }
         }
@@ -2872,19 +3078,8 @@ Component* JUCE_CALLTYPE Component::getCurrentlyFocusedComponent() noexcept
 
 void JUCE_CALLTYPE Component::unfocusAllComponents()
 {
-    if (auto* c = getCurrentlyFocusedComponent())
-        c->giveAwayFocus (true);
-}
-
-void Component::giveAwayFocus (bool sendFocusLossEvent)
-{
-    auto* componentLosingFocus = currentlyFocusedComponent;
-    currentlyFocusedComponent = nullptr;
-
-    if (sendFocusLossEvent && componentLosingFocus != nullptr)
-        componentLosingFocus->internalFocusLoss (focusChangedDirectly);
-
-    Desktop::getInstance().triggerFocusCallback();
+    if (currentlyFocusedComponent != nullptr)
+        currentlyFocusedComponent->giveAwayKeyboardFocus();
 }
 
 //==============================================================================
@@ -2907,6 +3102,15 @@ void Component::setEnabled (bool shouldBeEnabled)
 
         BailOutChecker checker (this);
         componentListeners.callChecked (checker, [this] (ComponentListener& l) { l.componentEnablementChanged (*this); });
+
+        if (! shouldBeEnabled && hasKeyboardFocus (true))
+        {
+            if (parentComponent != nullptr)
+                parentComponent->grabKeyboardFocus();
+
+            // ensure that keyboard focus is given away if it wasn't taken by parent
+            giveAwayKeyboardFocus();
+        }
     }
 }
 
@@ -2936,13 +3140,16 @@ void Component::sendEnablementChangeMessage()
 //==============================================================================
 bool Component::isMouseOver (bool includeChildren) const
 {
+    if (! MessageManager::getInstance()->isThisTheMessageThread())
+        return flags.cachedMouseInsideComponent;
+
     for (auto& ms : Desktop::getInstance().getMouseSources())
     {
         auto* c = ms.getComponentUnderMouse();
 
-        if (c == this || (includeChildren && isParentOf (c)))
+        if (c != nullptr && (c == this || (includeChildren && isParentOf (c))))
             if (ms.isDragging() || ! (ms.isTouch() || ms.isPen()))
-                if (c->reallyContains (c->getLocalPoint (nullptr, ms.getScreenPosition()).roundToInt(), false))
+                if (c->reallyContains (c->getLocalPoint (nullptr, ms.getScreenPosition()), false))
                     return true;
     }
 
@@ -3027,6 +3234,65 @@ Component::BailOutChecker::BailOutChecker (Component* component)
 bool Component::BailOutChecker::shouldBailOut() const noexcept
 {
     return safePointer == nullptr;
+}
+
+//==============================================================================
+void Component::setTitle (const String& newTitle)
+{
+    componentTitle = newTitle;
+}
+
+void Component::setDescription (const String& newDescription)
+{
+    componentDescription = newDescription;
+}
+
+void Component::setHelpText (const String& newHelpText)
+{
+    componentHelpText = newHelpText;
+}
+
+void Component::setAccessible (bool shouldBeAccessible)
+{
+    flags.accessibilityIgnoredFlag = ! shouldBeAccessible;
+
+    if (flags.accessibilityIgnoredFlag)
+        invalidateAccessibilityHandler();
+}
+
+bool Component::isAccessible() const noexcept
+{
+    return (! flags.accessibilityIgnoredFlag
+            && (parentComponent == nullptr || parentComponent->isAccessible()));
+}
+
+std::unique_ptr<AccessibilityHandler> Component::createAccessibilityHandler()
+{
+    return std::make_unique<AccessibilityHandler> (*this, AccessibilityRole::unspecified);
+}
+
+std::unique_ptr<AccessibilityHandler> Component::createIgnoredAccessibilityHandler (Component& comp)
+{
+    return std::make_unique<AccessibilityHandler> (comp, AccessibilityRole::ignored);
+}
+
+void Component::invalidateAccessibilityHandler()
+{
+    accessibilityHandler = nullptr;
+}
+
+AccessibilityHandler* Component::getAccessibilityHandler()
+{
+    if (! isAccessible() || getWindowHandle() == nullptr)
+        return nullptr;
+
+    if (accessibilityHandler == nullptr
+        || accessibilityHandler->getTypeIndex() != std::type_index (typeid (*this)))
+    {
+        accessibilityHandler = createAccessibilityHandler();
+    }
+
+    return accessibilityHandler.get();
 }
 
 } // namespace juce

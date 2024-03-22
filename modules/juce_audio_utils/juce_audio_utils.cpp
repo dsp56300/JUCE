@@ -58,7 +58,9 @@
 #include "gui/juce_AudioThumbnail.cpp"
 #include "gui/juce_AudioThumbnailCache.cpp"
 #include "gui/juce_AudioVisualiserComponent.cpp"
+#include "gui/juce_KeyboardComponentBase.cpp"
 #include "gui/juce_MidiKeyboardComponent.cpp"
+#include "gui/juce_MPEKeyboardComponent.cpp"
 #include "gui/juce_AudioAppComponent.cpp"
 #include "players/juce_SoundPlayer.cpp"
 #include "players/juce_AudioProcessorPlayer.cpp"
@@ -81,7 +83,7 @@
 #elif JUCE_ANDROID
  #include "native/juce_android_BluetoothMidiDevicePairingDialogue.cpp"
 
-#elif JUCE_LINUX
+#elif JUCE_LINUX || JUCE_BSD
  #if JUCE_USE_CDREADER
   #include "native/juce_linux_AudioCDReader.cpp"
  #endif

@@ -54,6 +54,14 @@
  #endif
 
  #if JUCE_USE_DIRECTWRITE || JUCE_DIRECT2D
+  /*  This is a workaround for broken-by-default function definitions
+      in the MinGW headers. If you're using a newer distribution of MinGW,
+      then your headers may substitute the broken definitions with working definitions
+      when this flag is enabled. Unfortunately, not all MinGW headers contain this
+      workaround, so Direct2D remains disabled by default when building with MinGW.
+  */
+  #define WIDL_EXPLICIT_AGGREGATE_RETURNS 1
+
   /* If you hit a compile error trying to include these files, you may need to update
      your version of the Windows SDK to the latest one. The DirectWrite and Direct2D
      headers are in the version 7 SDKs.
@@ -67,15 +75,13 @@
   #include <cstdio>
  #endif
 
- #include <unordered_map>
-
  JUCE_END_IGNORE_WARNINGS_MSVC
 
 #elif JUCE_IOS
  #import <QuartzCore/QuartzCore.h>
  #import <CoreText/CoreText.h>
 
-#elif JUCE_LINUX
+#elif JUCE_LINUX || JUCE_BSD
  #ifndef JUCE_USE_FREETYPE
   #define JUCE_USE_FREETYPE 1
  #endif
@@ -128,6 +134,10 @@
 #include "effects/juce_DropShadowEffect.cpp"
 #include "effects/juce_GlowEffect.cpp"
 
+#if JUCE_UNIT_TESTS
+ #include "geometry/juce_Rectangle_test.cpp"
+#endif
+
 #if JUCE_USE_FREETYPE
  #include "native/juce_freetype_Fonts.cpp"
 #endif
@@ -147,7 +157,7 @@
   #include "native/juce_win32_Direct2DGraphicsContext.cpp"
  #endif
 
-#elif JUCE_LINUX
+#elif JUCE_LINUX || JUCE_BSD
  #include "native/juce_linux_Fonts.cpp"
  #include "native/juce_linux_IconHelpers.cpp"
 

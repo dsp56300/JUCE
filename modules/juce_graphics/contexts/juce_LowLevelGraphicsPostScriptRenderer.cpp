@@ -83,10 +83,6 @@ LowLevelGraphicsPostScriptRenderer::LowLevelGraphicsPostScriptRenderer (OutputSt
         << scale << ' ' << scale << " scale\n\n";
 }
 
-LowLevelGraphicsPostScriptRenderer::~LowLevelGraphicsPostScriptRenderer()
-{
-}
-
 //==============================================================================
 bool LowLevelGraphicsPostScriptRenderer::isVectorDevice() const
 {
@@ -165,10 +161,6 @@ bool LowLevelGraphicsPostScriptRenderer::isClipEmpty() const
 LowLevelGraphicsPostScriptRenderer::SavedState::SavedState()
     : xOffset (0),
       yOffset (0)
-{
-}
-
-LowLevelGraphicsPostScriptRenderer::SavedState::~SavedState()
 {
 }
 
@@ -532,7 +524,7 @@ void LowLevelGraphicsPostScriptRenderer::drawGlyph (int glyphNumber, const Affin
 {
     Path p;
     Font& font = stateStack.getLast()->font;
-    font.getTypeface()->getOutlineForGlyph (glyphNumber, p);
+    font.getTypefacePtr()->getOutlineForGlyph (glyphNumber, p);
     fillPath (p, AffineTransform::scale (font.getHeight() * font.getHorizontalScale(), font.getHeight()).followedBy (transform));
 }
 

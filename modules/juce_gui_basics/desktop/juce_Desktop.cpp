@@ -28,7 +28,8 @@ namespace juce
 
 Desktop::Desktop()
     : mouseSources (new MouseInputSource::SourceList()),
-      masterScaleFactor ((float) getDefaultMasterScale())
+      masterScaleFactor ((float) getDefaultMasterScale()),
+      nativeDarkModeChangeDetectorImpl (createNativeDarkModeChangeDetectorImpl())
 {
     displays.reset (new Displays (*this));
 }
@@ -188,13 +189,41 @@ void Desktop::addFocusChangeListener    (FocusChangeListener* l)   { focusListen
 void Desktop::removeFocusChangeListener (FocusChangeListener* l)   { focusListeners.remove (l); }
 void Desktop::triggerFocusCallback()                               { triggerAsyncUpdate(); }
 
+void Desktop::updateFocusOutline()
+{
+    if (auto* currentFocus = Component::getCurrentlyFocusedComponent())
+    {
+        if (currentFocus->hasFocusOutline())
+        {
+            focusOutline = currentFocus->getLookAndFeel().createFocusOutlineForComponent (*currentFocus);
+
+            if (focusOutline != nullptr)
+                focusOutline->setOwner (currentFocus);
+
+            return;
+        }
+    }
+
+    focusOutline = nullptr;
+}
+
 void Desktop::handleAsyncUpdate()
 {
     // The component may be deleted during this operation, but we'll use a SafePointer rather than a
     // BailOutChecker so that any remaining listeners will still get a callback (with a null pointer).
-    WeakReference<Component> currentFocus (Component::getCurrentlyFocusedComponent());
-    focusListeners.call ([&] (FocusChangeListener& l) { l.globalFocusChanged (currentFocus.get()); });
+    focusListeners.call ([currentFocus = WeakReference<Component> { Component::getCurrentlyFocusedComponent() }] (FocusChangeListener& l)
+    {
+        l.globalFocusChanged (currentFocus.get());
+    });
+
+    updateFocusOutline();
 }
+
+//==============================================================================
+void Desktop::addDarkModeSettingListener    (DarkModeSettingListener* l)  { darkModeSettingListeners.add (l); }
+void Desktop::removeDarkModeSettingListener (DarkModeSettingListener* l)  { darkModeSettingListeners.remove (l); }
+
+void Desktop::darkModeChanged()  { darkModeSettingListeners.call ([] (DarkModeSettingListener& l) { l.darkModeSettingChanged(); }); }
 
 //==============================================================================
 void Desktop::resetTimer()
@@ -247,9 +276,9 @@ void Desktop::sendMouseMove()
             auto pos = target->getLocalPoint (nullptr, lastFakeMouseMove);
             auto now = Time::getCurrentTime();
 
-            const MouseEvent me (getMainMouseSource(), pos, ModifierKeys::currentModifiers, MouseInputSource::invalidPressure,
-                                 MouseInputSource::invalidOrientation, MouseInputSource::invalidRotation,
-                                 MouseInputSource::invalidTiltX, MouseInputSource::invalidTiltY,
+            const MouseEvent me (getMainMouseSource(), pos, ModifierKeys::currentModifiers, MouseInputSource::defaultPressure,
+                                 MouseInputSource::defaultOrientation, MouseInputSource::defaultRotation,
+                                 MouseInputSource::defaultTiltX, MouseInputSource::defaultTiltY,
                                  target, target, now, pos, now, 0, false);
 
             if (me.mods.isAnyMouseButtonDown())

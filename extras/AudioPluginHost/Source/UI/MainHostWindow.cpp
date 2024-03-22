@@ -27,6 +27,203 @@
 #include "MainHostWindow.h"
 #include "../Plugins/InternalPlugins.h"
 
+constexpr const char* scanModeKey = "pluginScanMode";
+
+class CustomPluginScanner  : public KnownPluginList::CustomScanner,
+                             private ChangeListener
+{
+public:
+    CustomPluginScanner()
+    {
+        if (auto* file = getAppProperties().getUserSettings())
+            file->addChangeListener (this);
+
+        changeListenerCallback (nullptr);
+    }
+
+    ~CustomPluginScanner() override
+    {
+        if (auto* file = getAppProperties().getUserSettings())
+            file->removeChangeListener (this);
+    }
+
+    bool findPluginTypesFor (AudioPluginFormat& format,
+                             OwnedArray<PluginDescription>& result,
+                             const String& fileOrIdentifier) override
+    {
+        if (scanInProcess)
+        {
+            superprocess = nullptr;
+            format.findAllTypesForFile (result, fileOrIdentifier);
+            return true;
+        }
+
+        if (superprocess == nullptr)
+        {
+            superprocess = std::make_unique<Superprocess> (*this);
+
+            std::unique_lock<std::mutex> lock (mutex);
+            connectionLost = false;
+        }
+
+        MemoryBlock block;
+        MemoryOutputStream stream { block, true };
+        stream.writeString (format.getName());
+        stream.writeString (fileOrIdentifier);
+
+        if (superprocess->sendMessageToWorker (block))
+        {
+            std::unique_lock<std::mutex> lock (mutex);
+            gotResponse = false;
+            pluginDescription = nullptr;
+
+            for (;;)
+            {
+                if (condvar.wait_for (lock,
+                                      std::chrono::milliseconds (50),
+                                      [this] { return gotResponse || shouldExit(); }))
+                {
+                    break;
+                }
+            }
+
+            if (shouldExit())
+            {
+                superprocess = nullptr;
+                return true;
+            }
+
+            if (connectionLost)
+            {
+                superprocess = nullptr;
+                return false;
+            }
+
+            if (pluginDescription != nullptr)
+            {
+                for (const auto* item : pluginDescription->getChildIterator())
+                {
+                    auto desc = std::make_unique<PluginDescription>();
+
+                    if (desc->loadFromXml (*item))
+                        result.add (std::move (desc));
+                }
+            }
+
+            return true;
+        }
+
+        superprocess = nullptr;
+        return false;
+    }
+
+    void scanFinished() override
+    {
+        superprocess = nullptr;
+    }
+
+private:
+    class Superprocess  : private ChildProcessCoordinator
+    {
+    public:
+        explicit Superprocess (CustomPluginScanner& o)
+            : owner (o)
+        {
+            launchWorkerProcess (File::getSpecialLocation (File::currentExecutableFile), processUID, 0, 0);
+        }
+
+        using ChildProcessCoordinator::sendMessageToWorker;
+
+    private:
+        void handleMessageFromWorker (const MemoryBlock& mb) override
+        {
+            auto xml = parseXML (mb.toString());
+
+            const std::lock_guard<std::mutex> lock (owner.mutex);
+            owner.pluginDescription = std::move (xml);
+            owner.gotResponse = true;
+            owner.condvar.notify_one();
+        }
+
+        void handleConnectionLost() override
+        {
+            const std::lock_guard<std::mutex> lock (owner.mutex);
+            owner.pluginDescription = nullptr;
+            owner.gotResponse = true;
+            owner.connectionLost = true;
+            owner.condvar.notify_one();
+        }
+
+        CustomPluginScanner& owner;
+
+        JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (Superprocess)
+    };
+
+    void changeListenerCallback (ChangeBroadcaster*) override
+    {
+        if (auto* file = getAppProperties().getUserSettings())
+            scanInProcess = (file->getIntValue (scanModeKey) == 0);
+    }
+
+    std::unique_ptr<Superprocess> superprocess;
+    std::mutex mutex;
+    std::condition_variable condvar;
+    std::unique_ptr<XmlElement> pluginDescription;
+    bool gotResponse = false;
+    bool connectionLost = false;
+
+    std::atomic<bool> scanInProcess { true };
+
+    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (CustomPluginScanner)
+};
+
+//==============================================================================
+class CustomPluginListComponent  : public PluginListComponent
+{
+public:
+    CustomPluginListComponent (AudioPluginFormatManager& manager,
+                               KnownPluginList& listToRepresent,
+                               const File& pedal,
+                               PropertiesFile* props,
+                               bool async)
+        : PluginListComponent (manager, listToRepresent, pedal, props, async)
+    {
+        addAndMakeVisible (validationModeLabel);
+        addAndMakeVisible (validationModeBox);
+
+        validationModeLabel.attachToComponent (&validationModeBox, true);
+        validationModeLabel.setJustificationType (Justification::right);
+        validationModeLabel.setSize (100, 30);
+
+        auto unusedId = 1;
+
+        for (const auto mode : { "In-process", "Out-of-process" })
+            validationModeBox.addItem (mode, unusedId++);
+
+        validationModeBox.setSelectedItemIndex (getAppProperties().getUserSettings()->getIntValue (scanModeKey));
+
+        validationModeBox.onChange = [this]
+        {
+            getAppProperties().getUserSettings()->setValue (scanModeKey, validationModeBox.getSelectedItemIndex());
+        };
+
+        resized();
+    }
+
+    void resized() override
+    {
+        PluginListComponent::resized();
+
+        const auto& buttonBounds = getOptionsButton().getBounds();
+        validationModeBox.setBounds (buttonBounds.withWidth (130).withRightX (getWidth() - buttonBounds.getX()));
+    }
+
+private:
+    Label validationModeLabel { {}, "Scan mode" };
+    ComboBox validationModeBox;
+
+    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (CustomPluginListComponent)
+};
 
 //==============================================================================
 class MainHostWindow::PluginListWindow  : public DocumentWindow
@@ -41,10 +238,11 @@ public:
         auto deadMansPedalFile = getAppProperties().getUserSettings()
                                    ->getFile().getSiblingFile ("RecentlyCrashedPluginsList");
 
-        setContentOwned (new PluginListComponent (pluginFormatManager,
-                                                  owner.knownPluginList,
-                                                  deadMansPedalFile,
-                                                  getAppProperties().getUserSettings(), true), true);
+        setContentOwned (new CustomPluginListComponent (pluginFormatManager,
+                                                        owner.knownPluginList,
+                                                        deadMansPedalFile,
+                                                        getAppProperties().getUserSettings(),
+                                                        true), true);
 
         setResizable (true, false);
         setResizeLimits (300, 400, 800, 1500);
@@ -96,9 +294,13 @@ MainHostWindow::MainHostWindow()
     centreWithSize (800, 600);
    #endif
 
+    knownPluginList.setCustomScanner (std::make_unique<CustomPluginScanner>());
+
     graphHolder.reset (new GraphDocumentComponent (formatManager, deviceManager, knownPluginList));
 
     setContentNonOwned (graphHolder.get(), false);
+
+    setUsingNativeTitleBar (true);
 
     restoreWindowStateFromString (getAppProperties().getUserSettings()->getValue ("mainWindowPos"));
 
@@ -189,23 +391,45 @@ void MainHostWindow::tryToQuitApplication()
         // to flush any GUI events that may have been in transit before the app forces them to
         // be unloaded
         new AsyncQuitRetrier();
+        return;
     }
-    else if (ModalComponentManager::getInstance()->cancelAllModalComponents())
+
+    if (ModalComponentManager::getInstance()->cancelAllModalComponents())
     {
         new AsyncQuitRetrier();
+        return;
     }
-   #if JUCE_ANDROID || JUCE_IOS
-    else if (graphHolder == nullptr || graphHolder->graph->saveDocument (PluginGraph::getDefaultGraphDocumentOnMobile()))
-   #else
-    else if (graphHolder == nullptr || graphHolder->graph->saveIfNeededAndUserAgrees() == FileBasedDocument::savedOk)
-   #endif
-    {
-        // Some plug-ins do not want [NSApp stop] to be called
-        // before the plug-ins are not deallocated.
-        graphHolder->releaseGraph();
 
-        JUCEApplication::quit();
+    if (graphHolder != nullptr)
+    {
+        auto releaseAndQuit = [this]
+        {
+            // Some plug-ins do not want [NSApp stop] to be called
+            // before the plug-ins are not deallocated.
+            graphHolder->releaseGraph();
+
+            JUCEApplication::quit();
+        };
+
+       #if JUCE_ANDROID || JUCE_IOS
+        if (graphHolder->graph->saveDocument (PluginGraph::getDefaultGraphDocumentOnMobile()))
+            releaseAndQuit();
+       #else
+        SafePointer<MainHostWindow> parent { this };
+        graphHolder->graph->saveIfNeededAndUserAgreesAsync ([parent, releaseAndQuit] (FileBasedDocument::SaveResult r)
+        {
+            if (parent == nullptr)
+                return;
+
+            if (r == FileBasedDocument::savedOk)
+                releaseAndQuit();
+        });
+       #endif
+
+        return;
     }
+
+    JUCEApplication::quit();
 }
 
 void MainHostWindow::changeListenerCallback (ChangeBroadcaster* changed)
@@ -329,9 +553,20 @@ void MainHostWindow::menuItemSelected (int menuItemID, int /*topLevelMenuIndex*/
                                             ->getValue ("recentFilterGraphFiles"));
 
         if (graphHolder != nullptr)
+        {
             if (auto* graph = graphHolder->graph.get())
-                if (graph != nullptr && graph->saveIfNeededAndUserAgrees() == FileBasedDocument::savedOk)
-                    graph->loadFrom (recentFiles.getFile (menuItemID - 100), true);
+            {
+                SafePointer<MainHostWindow> parent { this };
+                graph->saveIfNeededAndUserAgreesAsync ([parent, recentFiles, menuItemID] (FileBasedDocument::SaveResult r)
+                {
+                    if (parent == nullptr)
+                        return;
+
+                    if (r == FileBasedDocument::savedOk)
+                        parent->graphHolder->graph->loadFrom (recentFiles.getFile (menuItemID - 100), true);
+                });
+            }
+        }
     }
    #endif
     else if (menuItemID >= 200 && menuItemID < 210)
@@ -492,23 +727,43 @@ bool MainHostWindow::perform (const InvocationInfo& info)
     {
    #if ! (JUCE_IOS || JUCE_ANDROID)
     case CommandIDs::newFile:
-        if (graphHolder != nullptr && graphHolder->graph != nullptr && graphHolder->graph->saveIfNeededAndUserAgrees() == FileBasedDocument::savedOk)
-            graphHolder->graph->newDocument();
+        if (graphHolder != nullptr && graphHolder->graph != nullptr)
+        {
+            SafePointer<MainHostWindow> parent { this };
+            graphHolder->graph->saveIfNeededAndUserAgreesAsync ([parent] (FileBasedDocument::SaveResult r)
+            {
+                if (parent == nullptr)
+                    return;
+
+                if (r == FileBasedDocument::savedOk)
+                    parent->graphHolder->graph->newDocument();
+            });
+        }
         break;
 
     case CommandIDs::open:
-        if (graphHolder != nullptr && graphHolder->graph != nullptr && graphHolder->graph->saveIfNeededAndUserAgrees() == FileBasedDocument::savedOk)
-            graphHolder->graph->loadFromUserSpecifiedFile (true);
+         if (graphHolder != nullptr && graphHolder->graph != nullptr)
+         {
+             SafePointer<MainHostWindow> parent { this };
+             graphHolder->graph->saveIfNeededAndUserAgreesAsync ([parent] (FileBasedDocument::SaveResult r)
+             {
+                 if (parent == nullptr)
+                     return;
+
+                 if (r == FileBasedDocument::savedOk)
+                     parent->graphHolder->graph->loadFromUserSpecifiedFileAsync (true, [] (Result) {});
+             });
+         }
         break;
 
     case CommandIDs::save:
         if (graphHolder != nullptr && graphHolder->graph != nullptr)
-            graphHolder->graph->save (true, true);
+            graphHolder->graph->saveAsync (true, true, nullptr);
         break;
 
     case CommandIDs::saveAs:
         if (graphHolder != nullptr && graphHolder->graph != nullptr)
-            graphHolder->graph->saveAs (File(), true, true, true);
+            graphHolder->graph->saveAsAsync ({}, true, true, true, nullptr);
         break;
    #endif
 
@@ -630,11 +885,22 @@ void MainHostWindow::filesDropped (const StringArray& files, int x, int y)
     if (graphHolder != nullptr)
     {
        #if ! (JUCE_ANDROID || JUCE_IOS)
-        if (files.size() == 1 && File (files[0]).hasFileExtension (PluginGraph::getFilenameSuffix()))
+        File firstFile { files[0] };
+
+        if (files.size() == 1 && firstFile.hasFileExtension (PluginGraph::getFilenameSuffix()))
         {
             if (auto* g = graphHolder->graph.get())
-                if (g->saveIfNeededAndUserAgrees() == FileBasedDocument::savedOk)
-                    g->loadFrom (File (files[0]), true);
+            {
+                SafePointer<MainHostWindow> parent;
+                g->saveIfNeededAndUserAgreesAsync ([parent, g, firstFile] (FileBasedDocument::SaveResult r)
+                {
+                    if (parent == nullptr)
+                        return;
+
+                    if (r == FileBasedDocument::savedOk)
+                        g->loadFrom (firstFile, true);
+                });
+            }
         }
         else
        #endif

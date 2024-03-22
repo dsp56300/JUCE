@@ -42,6 +42,9 @@ if(JUCE_BUILD_HELPER_TOOLS)
         juce::juce_recommended_lto_flags
         juce::juce_recommended_warning_flags)
 
+    set_target_properties(juceaide PROPERTIES
+        MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+
     export(TARGETS juceaide
            NAMESPACE juce_tools::
            FILE "${JUCE_BINARY_DIR}/JUCEToolsExport.cmake")
@@ -50,20 +53,32 @@ else()
     # environment variables, which is unfortunate because we really don't want to cross-compile
     # juceaide. If you really want to set the compilers for juceaide, pass the appropriate
     # CMAKE_<lang>_COMPILER flags when configuring CMake.
-    unset(ENV{ASM})
-    unset(ENV{CC})
-    unset(ENV{CXX})
+    if(CMAKE_CROSSCOMPILING)
+        unset(ENV{ASM})
+        unset(ENV{CC})
+        unset(ENV{CXX})
+    else()
+        # When building with clang-cl in Clion on Windows for an x64 target, the ABI detection phase
+        # of the inner build can fail unless we pass through these flags too
+        set(extra_configure_flags
+            "-DCMAKE_CXX_FLAGS=${CMAKE_CXX_FLAGS}"
+            "-DCMAKE_C_FLAGS=${CMAKE_C_FLAGS}"
+            "-DCMAKE_EXE_LINKER_FLAGS=${CMAKE_EXE_LINKER_FLAGS}"
+            "-DCMAKE_GENERATOR_PLATFORM=${CMAKE_GENERATOR_PLATFORM}")
+    endif()
 
     message(STATUS "Configuring juceaide")
 
-    # Looks like we're boostrapping, reinvoke CMake
+    # Looks like we're bootstrapping, reinvoke CMake
     execute_process(COMMAND "${CMAKE_COMMAND}"
             "."
             "-B${JUCE_BINARY_DIR}/tools"
             "-G${CMAKE_GENERATOR}"
+            "-DCMAKE_MAKE_PROGRAM=${CMAKE_MAKE_PROGRAM}"
             "-DCMAKE_BUILD_TYPE=Debug"
             "-DJUCE_BUILD_HELPER_TOOLS=ON"
             "-DCMAKE_INSTALL_PREFIX=${CMAKE_INSTALL_PREFIX}"
+            ${extra_configure_flags}
         WORKING_DIRECTORY "${JUCE_SOURCE_DIR}"
         OUTPUT_VARIABLE command_output
         ERROR_VARIABLE command_output

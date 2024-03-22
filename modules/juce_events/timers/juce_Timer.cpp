@@ -38,6 +38,7 @@ public:
 
     ~TimerThread() override
     {
+        cancelPendingUpdate();
         signalThreadShouldExit();
         callbackArrived.signal();
         stopThread (4000);
@@ -186,8 +187,8 @@ private:
     {
         // Trying to add a timer that's already here - shouldn't get to this point,
         // so if you get this assertion, let me know!
-        jassert (std::find_if (timers.begin(), timers.end(),
-                               [t] (TimerCountdown i) { return i.timer == t; }) == timers.end());
+        jassert (std::none_of (timers.begin(), timers.end(),
+                               [t] (TimerCountdown i) { return i.timer == t; }));
 
         auto pos = timers.size();
 

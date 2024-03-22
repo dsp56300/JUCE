@@ -35,11 +35,12 @@
 
   ID:                 juce_box2d
   vendor:             juce
-  version:            6.0.8
+  version:            6.1.6
   name:               JUCE wrapper for the Box2D physics engine
   description:        The Box2D physics engine and some utility classes.
   website:            http://www.juce.com/juce
   license:            GPL/Commercial
+  minimumCppStandard: 14
 
   dependencies:       juce_graphics
 
@@ -57,7 +58,8 @@
 JUCE_BEGIN_IGNORE_WARNINGS_GCC_LIKE ("-Wconversion",
                                      "-Wshadow-field",
                                      "-Wzero-as-null-pointer-constant",
-                                     "-Wsign-conversion")
+                                     "-Wsign-conversion",
+                                     "-Wdeprecated")
 
 #include <climits>
 #include <cfloat>
