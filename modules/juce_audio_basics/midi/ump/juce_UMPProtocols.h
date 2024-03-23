@@ -2,7 +2,7 @@
   ==============================================================================
 
    This file is part of the JUCE library.
-   Copyright (c) 2020 - Raw Material Software Limited
+   Copyright (c) 2022 - Raw Material Software Limited
 
    JUCE is an open source library subject to commercial or open-source
    licensing.
@@ -22,9 +22,7 @@
 
 #ifndef DOXYGEN
 
-namespace juce
-{
-namespace universal_midi_packets
+namespace juce::universal_midi_packets
 {
 
 /** The kinds of MIDI protocol that can be formatted into Universal MIDI Packets. */
@@ -42,7 +40,6 @@ enum class MidiProtocol
     UMP_MIDI_2_0,
 };
 
-}
-}
+} // namespace juce::universal_midi_packets
 
 #endif

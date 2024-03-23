@@ -2,15 +2,15 @@
   ==============================================================================
 
    This file is part of the JUCE library.
-   Copyright (c) 2020 - Raw Material Software Limited
+   Copyright (c) 2022 - Raw Material Software Limited
 
    JUCE is an open source library subject to commercial or open-source
    licensing.
 
-   By using JUCE, you agree to the terms of both the JUCE 6 End-User License
-   Agreement and JUCE Privacy Policy (both effective as of the 16th June 2020).
+   By using JUCE, you agree to the terms of both the JUCE 7 End-User License
+   Agreement and JUCE Privacy Policy.
 
-   End User License Agreement: www.juce.com/juce-6-licence
+   End User License Agreement: www.juce.com/juce-7-licence
    Privacy Policy: www.juce.com/juce-privacy-policy
 
    Or: You may also use this code under the terms of the GPL v3 (see
@@ -104,7 +104,7 @@ int writeBinaryData (juce::ArgumentList&& args)
     return 0;
 }
 
-struct IconParseResults final
+struct IconParseResults
 {
     juce::build_tools::Icons icons;
     juce::File output;
@@ -191,7 +191,7 @@ bool getBoolValue (const std::unordered_map<juce::String, juce::String>& dict, j
         || str.equalsIgnoreCase ("on");
 }
 
-struct UpdateField final
+struct UpdateField
 {
     const std::unordered_map<juce::String, juce::String>& dict;
 
@@ -270,6 +270,7 @@ juce::build_tools::PlistOptions parsePlistOptions (const juce::File& file,
     updateField ("PLUGIN_AU_MAIN_TYPE",                  result.auMainType);
     updateField ("IS_AU_SANDBOX_SAFE",                   result.isAuSandboxSafe);
     updateField ("IS_PLUGIN_SYNTH",                      result.isPluginSynth);
+    updateField ("IS_PLUGIN_ARA_EFFECT",                 result.isPluginARAEffect);
     updateField ("SUPPRESS_AU_PLIST_RESOURCE_USAGE",     result.suppressResourceUsage);
     updateField ("BUNDLE_ID",                            result.bundleIdentifier);
     updateField ("ICON_FILE",                            result.iconFile);
@@ -332,6 +333,7 @@ juce::build_tools::EntitlementOptions parseEntitlementsOptions (const juce::File
 
     updateField ("IS_IOS",                          result.isiOS);
     updateField ("IS_PLUGIN",                       result.isAudioPluginProject);
+    updateField ("IS_AU_PLUGIN_HOST",               result.isAUPluginHost);
     updateField ("ICLOUD_PERMISSIONS_ENABLED",      result.isiCloudPermissionsEnabled);
     updateField ("PUSH_NOTIFICATIONS_ENABLED",      result.isPushNotificationsEnabled);
     updateField ("APP_GROUPS_ENABLED",              result.isAppGroupsEnabled);
@@ -364,6 +366,14 @@ juce::build_tools::EntitlementOptions parseEntitlementsOptions (const juce::File
         if (! values.isEmpty())
             result.appSandboxTemporaryPaths.push_back ({ "com.apple.security.temporary-exception.files." + entry.key,
                                                          std::move (values) });
+    }
+
+    {
+        juce::StringArray values;
+        updateField ("APP_SANDBOX_EXCEPTION_IOKIT", values);
+
+        if (! values.isEmpty())
+            result.appSandboxExceptionIOKit = values;
     }
 
     result.type = type;
@@ -529,7 +539,7 @@ int main (int argc, char** argv)
         juce::ArgumentList argumentList { arguments.front(),
                                           juce::StringArray (arguments.data() + 1, (int) arguments.size() - 1) };
 
-        using Fn = std::add_lvalue_reference<decltype (writeBinaryData)>::type;
+        using Fn = int (*) (juce::ArgumentList&&);
 
         const std::unordered_map<juce::String, Fn> commands
         {
@@ -552,6 +562,21 @@ int main (int argc, char** argv)
         if (it == commands.cend())
             juce::ConsoleApplication::fail ("No matching mode", 1);
 
-        return it->second (std::move (argumentList));
+        try
+        {
+            return it->second (std::move (argumentList));
+        }
+        catch (const juce::build_tools::SaveError& error)
+        {
+            juce::ConsoleApplication::fail (error.message);
+        }
+        catch (const std::exception& ex)
+        {
+            juce::ConsoleApplication::fail (ex.what());
+        }
+        catch (...)
+        {
+            juce::ConsoleApplication::fail ("Unhandled exception");
+        }
     });
 }

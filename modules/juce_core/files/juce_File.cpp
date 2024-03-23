@@ -2,7 +2,7 @@
   ==============================================================================
 
    This file is part of the JUCE library.
-   Copyright (c) 2020 - Raw Material Software Limited
+   Copyright (c) 2022 - Raw Material Software Limited
 
    JUCE is an open source library subject to commercial or open-source
    licensing.
@@ -358,6 +358,14 @@ String File::getPathUpToLastSlash() const
 File File::getParentDirectory() const
 {
     return createFileWithoutCheckingPath (getPathUpToLastSlash());
+}
+
+bool File::isNonEmptyDirectory() const
+{
+    if (! isDirectory())
+        return false;
+
+    return RangedDirectoryIterator (*this, false, "*", findFilesAndDirectories) != RangedDirectoryIterator();
 }
 
 //==============================================================================
@@ -953,7 +961,7 @@ File File::createTempFile (StringRef fileNameEnding)
 }
 
 bool File::createSymbolicLink (const File& linkFileToCreate,
-                               const String& nativePathOfTarget,
+                               [[maybe_unused]] const String& nativePathOfTarget,
                                bool overwriteExisting)
 {
     if (linkFileToCreate.exists())
@@ -970,7 +978,7 @@ bool File::createSymbolicLink (const File& linkFileToCreate,
             linkFileToCreate.deleteFile();
     }
 
-   #if JUCE_MAC || JUCE_LINUX
+   #if JUCE_MAC || JUCE_LINUX || JUCE_BSD
     // one common reason for getting an error here is that the file already exists
     if (symlink (nativePathOfTarget.toRawUTF8(), linkFileToCreate.getFullPathName().toRawUTF8()) == -1)
     {
@@ -986,7 +994,6 @@ bool File::createSymbolicLink (const File& linkFileToCreate,
                                nativePathOfTarget.toWideCharPointer(),
                                targetFile.isDirectory() ? SYMBOLIC_LINK_FLAG_DIRECTORY : 0) != FALSE;
    #else
-    ignoreUnused (nativePathOfTarget);
     jassertfalse; // symbolic links not supported on this platform!
     return false;
    #endif
@@ -1038,7 +1045,7 @@ MemoryMappedFile::MemoryMappedFile (const File& file, const Range<int64>& fileRa
 //==============================================================================
 #if JUCE_UNIT_TESTS
 
-class FileTests  : public UnitTest
+class FileTests final : public UnitTest
 {
 public:
     FileTests()
@@ -1056,7 +1063,7 @@ public:
         expect (! File().existsAsFile());
         expect (! File().isDirectory());
        #if ! JUCE_WINDOWS
-        expect (File("/").isDirectory());
+        expect (File ("/").isDirectory());
        #endif
         expect (home.isDirectory());
         expect (home.exists());
@@ -1146,10 +1153,17 @@ public:
         expect (home.getChildFile ("./../xyz") == home.getParentDirectory().getChildFile ("xyz"));
         expect (home.getChildFile ("a1/a2/a3/./../../a4") == home.getChildFile ("a1/a4"));
 
+        expect (! File().hasReadAccess());
+        expect (! File().hasWriteAccess());
+
+        expect (! tempFile.hasReadAccess());
+
         {
             FileOutputStream fo (tempFile);
             fo.write ("0123456789", 10);
         }
+
+        expect (tempFile.hasReadAccess());
 
         expect (tempFile.exists());
         expect (tempFile.getSize() == 10);

@@ -2,15 +2,15 @@
   ==============================================================================
 
    This file is part of the JUCE library.
-   Copyright (c) 2020 - Raw Material Software Limited
+   Copyright (c) 2022 - Raw Material Software Limited
 
    JUCE is an open source library subject to commercial or open-source
    licensing.
 
-   By using JUCE, you agree to the terms of both the JUCE 6 End-User License
-   Agreement and JUCE Privacy Policy (both effective as of the 16th June 2020).
+   By using JUCE, you agree to the terms of both the JUCE 7 End-User License
+   Agreement and JUCE Privacy Policy.
 
-   End User License Agreement: www.juce.com/juce-6-licence
+   End User License Agreement: www.juce.com/juce-7-licence
    Privacy Policy: www.juce.com/juce-privacy-policy
 
    Or: You may also use this code under the terms of the GPL v3 (see
@@ -23,9 +23,7 @@
   ==============================================================================
 */
 
-namespace juce
-{
-namespace dsp
+namespace juce::dsp
 {
 
 //==============================================================================
@@ -86,7 +84,7 @@ template <typename SampleType, typename InterpolationType>
 void DelayLine<SampleType, InterpolationType>::setMaximumDelayInSamples (int maxDelayInSamples)
 {
     jassert (maxDelayInSamples >= 0);
-    totalSize = jmax (4, maxDelayInSamples + 1);
+    totalSize = jmax (4, maxDelayInSamples + 2);
     bufferData.setSize ((int) bufferData.getNumChannels(), totalSize, false, false, true);
     reset();
 }
@@ -114,7 +112,7 @@ template <typename SampleType, typename InterpolationType>
 SampleType DelayLine<SampleType, InterpolationType>::popSample (int channel, SampleType delayInSamples, bool updateReadPointer)
 {
     if (delayInSamples >= 0)
-        setDelay(delayInSamples);
+        setDelay (delayInSamples);
 
     auto result = interpolateSample (channel);
 
@@ -134,5 +132,4 @@ template class DelayLine<double, DelayLineInterpolationTypes::Lagrange3rd>;
 template class DelayLine<float,  DelayLineInterpolationTypes::Thiran>;
 template class DelayLine<double, DelayLineInterpolationTypes::Thiran>;
 
-} // namespace dsp
-} // namespace juce
+} // namespace juce::dsp

@@ -2,15 +2,15 @@
   ==============================================================================
 
    This file is part of the JUCE library.
-   Copyright (c) 2020 - Raw Material Software Limited
+   Copyright (c) 2022 - Raw Material Software Limited
 
    JUCE is an open source library subject to commercial or open-source
    licensing.
 
-   By using JUCE, you agree to the terms of both the JUCE 6 End-User License
-   Agreement and JUCE Privacy Policy (both effective as of the 16th June 2020).
+   By using JUCE, you agree to the terms of both the JUCE 7 End-User License
+   Agreement and JUCE Privacy Policy.
 
-   End User License Agreement: www.juce.com/juce-6-licence
+   End User License Agreement: www.juce.com/juce-7-licence
    Privacy Policy: www.juce.com/juce-privacy-policy
 
    Or: You may also use this code under the terms of the GPL v3 (see
@@ -23,12 +23,10 @@
   ==============================================================================
 */
 
-namespace juce
-{
-namespace dsp
+namespace juce::dsp
 {
 
-struct FFTUnitTest  : public UnitTest
+struct FFTUnitTest final : public UnitTest
 {
     FFTUnitTest()
         : UnitTest ("FFT", UnitTestCategories::dsp)
@@ -63,7 +61,7 @@ struct FFTUnitTest  : public UnitTest
                                                / static_cast<float> (n));
 
         for (size_t i = 0; i < n; ++i)
-            out[i] = freqConvolution (in, static_cast<float>(i) * base_freq, n);
+            out[i] = freqConvolution (in, static_cast<float> (i) * base_freq, n);
     }
 
     static void performReferenceFourier (const float* in, Complex<float>* out,
@@ -78,7 +76,7 @@ struct FFTUnitTest  : public UnitTest
                                                 / static_cast<float> (n));
 
         for (size_t i = 0; i < n; ++i)
-            out[i] = freqConvolution (buffer.getData(), static_cast<float>(i) * base_freq, n);
+            out[i] = freqConvolution (buffer.getData(), static_cast<float> (i) * base_freq, n);
     }
 
 
@@ -167,7 +165,7 @@ struct FFTUnitTest  : public UnitTest
 
     struct ComplexTest
     {
-        static void run(FFTUnitTest& u)
+        static void run (FFTUnitTest& u)
         {
             Random random (378272);
 
@@ -214,5 +212,4 @@ struct FFTUnitTest  : public UnitTest
 
 static FFTUnitTest fftUnitTest;
 
-} // namespace dsp
-} // namespace juce
+} // namespace juce::dsp

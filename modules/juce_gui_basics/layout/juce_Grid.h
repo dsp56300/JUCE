@@ -2,15 +2,15 @@
   ==============================================================================
 
    This file is part of the JUCE library.
-   Copyright (c) 2020 - Raw Material Software Limited
+   Copyright (c) 2022 - Raw Material Software Limited
 
    JUCE is an open source library subject to commercial or open-source
    licensing.
 
-   By using JUCE, you agree to the terms of both the JUCE 6 End-User License
-   Agreement and JUCE Privacy Policy (both effective as of the 16th June 2020).
+   By using JUCE, you agree to the terms of both the JUCE 7 End-User License
+   Agreement and JUCE Privacy Policy.
 
-   End User License Agreement: www.juce.com/juce-6-licence
+   End User License Agreement: www.juce.com/juce-7-licence
    Privacy Policy: www.juce.com/juce-privacy-policy
 
    Or: You may also use this code under the terms of the GPL v3 (see
@@ -43,10 +43,10 @@ public:
     /** A size in pixels */
     struct Px  final
     {
-        explicit Px (float p) : pixels (static_cast<long double>(p)) { /*sta (p >= 0.0f);*/ }
-        explicit Px (int p)   : pixels (static_cast<long double>(p)) { /*sta (p >= 0.0f);*/ }
+        explicit Px (float p) : pixels (static_cast<long double> (p)) { /*sta (p >= 0.0f);*/ }
+        explicit Px (int p)   : pixels (static_cast<long double> (p)) { /*sta (p >= 0.0f);*/ }
         explicit constexpr Px (long double p)        : pixels (p) {}
-        explicit constexpr Px (unsigned long long p) : pixels (static_cast<long double>(p)) {}
+        explicit constexpr Px (unsigned long long p) : pixels (static_cast<long double> (p)) {}
 
         long double pixels;
     };
@@ -156,9 +156,6 @@ public:
     /** Creates an empty Grid container with default parameters. */
     Grid() = default;
 
-    /** Destructor */
-    ~Grid() noexcept = default;
-
     //==============================================================================
     /** Specifies the alignment of content inside the items along the rows. */
     JustifyItems   justifyItems   = JustifyItems::stretch;
@@ -216,14 +213,11 @@ public:
 
 private:
     //==============================================================================
-    struct SizeCalculation;
-    struct PlacementHelpers;
-    struct AutoPlacement;
-    struct BoxAlignment;
+    struct Helpers;
 };
 
-constexpr Grid::Px operator"" _px (long double px)          { return Grid::Px { px }; }
-constexpr Grid::Px operator"" _px (unsigned long long px)   { return Grid::Px { px }; }
-constexpr Grid::Fr operator"" _fr (unsigned long long fr)   { return Grid::Fr { fr }; }
+constexpr Grid::Px operator""_px (long double px)          { return Grid::Px { px }; }
+constexpr Grid::Px operator""_px (unsigned long long px)   { return Grid::Px { px }; }
+constexpr Grid::Fr operator""_fr (unsigned long long fr)   { return Grid::Fr { fr }; }
 
 } // namespace juce

@@ -2,7 +2,7 @@
   ==============================================================================
 
    This file is part of the JUCE examples.
-   Copyright (c) 2020 - Raw Material Software Limited
+   Copyright (c) 2022 - Raw Material Software Limited
 
    The code included in this file is provided under the terms of the ISC license
    http://www.isc.org/downloads/software-support-policy/isc-license. Permission
@@ -33,7 +33,7 @@
                         juce_audio_plugin_client, juce_audio_processors,
                         juce_audio_utils, juce_core, juce_data_structures,
                         juce_events, juce_graphics, juce_gui_basics, juce_gui_extra
- exporters:             xcode_mac, vs2019, linux_make
+ exporters:             xcode_mac, vs2022, linux_make
 
  moduleFlags:           JUCE_STRICT_REFCOUNTEDPOINTER=1
 
@@ -89,16 +89,14 @@ public:
         messages.erase (messages.begin(), std::next (messages.begin(), numToRemove));
         messages.insert (messages.end(), std::prev (end, numToAdd), end);
 
-        if (onChange != nullptr)
-            onChange();
+        NullCheckedInvocation::invoke (onChange);
     }
 
     void clear()
     {
         messages.clear();
 
-        if (onChange != nullptr)
-            onChange();
+        NullCheckedInvocation::invoke (onChange);
     }
 
     const MidiMessage& operator[] (size_t ind) const     { return messages[ind]; }
@@ -113,8 +111,8 @@ private:
 };
 
 //==============================================================================
-class MidiTable  : public Component,
-                   private TableListBoxModel
+class MidiTable final : public Component,
+                        private TableListBoxModel
 {
 public:
     MidiTable (MidiListModel& m)
@@ -220,8 +218,8 @@ private:
 };
 
 //==============================================================================
-class MidiLoggerPluginDemoProcessor  : public AudioProcessor,
-                                       private Timer
+class MidiLoggerPluginDemoProcessor final : public AudioProcessor,
+                                            private Timer
 {
 public:
     MidiLoggerPluginDemoProcessor()
@@ -268,8 +266,8 @@ public:
     }
 
 private:
-    class Editor  : public AudioProcessorEditor,
-                    private Value::Listener
+    class Editor final : public AudioProcessorEditor,
+                         private Value::Listener
     {
     public:
         explicit Editor (MidiLoggerPluginDemoProcessor& ownerIn)
@@ -337,9 +335,11 @@ private:
 
     static BusesProperties getBusesLayout()
     {
-        // Live doesn't like to load midi-only plugins, so we add an audio output there.
-        return PluginHostType().isAbletonLive() ? BusesProperties().withOutput ("out", AudioChannelSet::stereo())
-                                                : BusesProperties();
+        // Live and Cakewalk don't like to load midi-only plugins, so we add an audio output there.
+        const PluginHostType host;
+        return host.isAbletonLive() || host.isSonar()
+             ? BusesProperties().withOutput ("out", AudioChannelSet::stereo())
+             : BusesProperties();
     }
 
     ValueTree state { "state" };

@@ -2,15 +2,15 @@
   ==============================================================================
 
    This file is part of the JUCE library.
-   Copyright (c) 2020 - Raw Material Software Limited
+   Copyright (c) 2022 - Raw Material Software Limited
 
    JUCE is an open source library subject to commercial or open-source
    licensing.
 
-   By using JUCE, you agree to the terms of both the JUCE 6 End-User License
-   Agreement and JUCE Privacy Policy (both effective as of the 16th June 2020).
+   By using JUCE, you agree to the terms of both the JUCE 7 End-User License
+   Agreement and JUCE Privacy Policy.
 
-   End User License Agreement: www.juce.com/juce-6-licence
+   End User License Agreement: www.juce.com/juce-7-licence
    Privacy Policy: www.juce.com/juce-privacy-policy
 
    Or: You may also use this code under the terms of the GPL v3 (see
@@ -31,8 +31,8 @@
 //==============================================================================
 #if JUCE_MAC || JUCE_WINDOWS || JUCE_LINUX || JUCE_BSD
  // Just add a simple icon to the Window system tray area or Mac menu bar..
- struct DemoTaskbarComponent  : public SystemTrayIconComponent,
-                                private Timer
+ struct DemoTaskbarComponent final : public SystemTrayIconComponent,
+                                     private Timer
  {
      DemoTaskbarComponent()
      {
@@ -76,7 +76,7 @@
 std::unique_ptr<AudioDeviceManager> sharedAudioDeviceManager;
 
 //==============================================================================
-class DemoRunnerApplication  : public JUCEApplication
+class DemoRunnerApplication final : public JUCEApplication
 {
 public:
     //==============================================================================
@@ -117,7 +117,7 @@ public:
     ApplicationCommandManager& getGlobalCommandManager()  { return commandManager; }
 
 private:
-    class MainAppWindow    : public DocumentWindow
+    class MainAppWindow final : public DocumentWindow
     {
     public:
         MainAppWindow (const String& name)
@@ -152,6 +152,13 @@ private:
         }
 
         void closeButtonPressed() override    { JUCEApplication::getInstance()->systemRequestedQuit(); }
+
+       #if JUCE_IOS || JUCE_ANDROID
+        void parentSizeChanged() override
+        {
+            getMainComponent().resized();
+        }
+       #endif
 
         //==============================================================================
         MainComponent& getMainComponent()    { return *dynamic_cast<MainComponent*> (getContentComponent()); }

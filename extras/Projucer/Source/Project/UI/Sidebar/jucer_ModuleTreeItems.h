@@ -2,15 +2,15 @@
   ==============================================================================
 
    This file is part of the JUCE library.
-   Copyright (c) 2020 - Raw Material Software Limited
+   Copyright (c) 2022 - Raw Material Software Limited
 
    JUCE is an open source library subject to commercial or open-source
    licensing.
 
-   By using JUCE, you agree to the terms of both the JUCE 6 End-User License
-   Agreement and JUCE Privacy Policy (both effective as of the 16th June 2020).
+   By using JUCE, you agree to the terms of both the JUCE 7 End-User License
+   Agreement and JUCE Privacy Policy.
 
-   End User License Agreement: www.juce.com/juce-6-licence
+   End User License Agreement: www.juce.com/juce-7-licence
    Privacy Policy: www.juce.com/juce-privacy-policy
 
    Or: You may also use this code under the terms of the GPL v3 (see
@@ -27,7 +27,7 @@
 
 
 //==============================================================================
-class ModuleItem   : public ProjectTreeItemBase
+class ModuleItem final : public ProjectTreeItemBase
 {
 public:
     ModuleItem (Project& p, const String& modID)
@@ -117,9 +117,9 @@ private:
     bool cppStandardHigherThanProject = false;
 
     //==============================================================================
-    class ModuleSettingsPanel  : public Component,
-                                 private ValueTree::Listener,
-                                 private Value::Listener
+    class ModuleSettingsPanel final : public Component,
+                                      private ValueTree::Listener,
+                                      private Value::Listener
     {
     public:
         ModuleSettingsPanel (Project& p, const String& modID, TreeView* tree)
@@ -165,9 +165,6 @@ private:
 
             for (Project::ExporterIterator exporter (project); exporter.next();)
             {
-                if (exporter->isCLion())
-                    continue;
-
                 auto modulePathValue = exporter->getPathForModuleValue (moduleID);
                 const auto fallbackPath = getAppSettings().getStoredPath (isJUCEModule (moduleID) ? Ids::defaultJuceModulePath
                                                                                                   : Ids::defaultUserModulePath,
@@ -278,8 +275,8 @@ private:
         String moduleID;
 
         //==============================================================================
-        class ModuleInfoComponent  : public PropertyComponent,
-                                     private Value::Listener
+        class ModuleInfoComponent final  : public PropertyComponent,
+                                           private Value::Listener
         {
         public:
             ModuleInfoComponent (Project& p, const String& modID)
@@ -340,7 +337,7 @@ private:
         };
 
         //==============================================================================
-        class MissingDependenciesComponent  : public PropertyComponent
+        class MissingDependenciesComponent final : public PropertyComponent
         {
         public:
             MissingDependenciesComponent (Project& p, const String& modID)
@@ -378,10 +375,11 @@ private:
                 {
                     missingDependencies = enabledModules.getExtraDependenciesNeeded (moduleID);
 
-                    AlertWindow::showMessageBoxAsync (MessageBoxIconType::WarningIcon,
-                                                      "Adding Missing Dependencies",
-                                                      "Couldn't locate some of these modules - you'll need to find their "
-                                                      "folders manually and add them to the list.");
+                    auto options = MessageBoxOptions::makeOptionsOk (MessageBoxIconType::WarningIcon,
+                                                                     "Adding Missing Dependencies",
+                                                                     "Couldn't locate some of these modules - you'll need to find their "
+                                                                     "folders manually and add them to the list.");
+                    messageBox = AlertWindow::showScopedAsync (options, nullptr);
                 }
             }
 
@@ -396,12 +394,13 @@ private:
             String moduleID;
             StringArray missingDependencies;
             TextButton fixButton { "Add Required Modules" };
+            ScopedMessageBox messageBox;
 
             JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (MissingDependenciesComponent)
         };
 
         //==============================================================================
-        struct CppStandardWarningComponent    : public PropertyComponent
+        struct CppStandardWarningComponent final : public PropertyComponent
         {
             CppStandardWarningComponent()
                 : PropertyComponent ("CppStandard", 100)
@@ -429,9 +428,9 @@ private:
 };
 
 //==============================================================================
-class EnabledModulesItem   : public ProjectTreeItemBase,
-                             private Value::Listener,
-                             private AvailableModulesList::Listener
+class EnabledModulesItem final : public ProjectTreeItemBase,
+                                 private Value::Listener,
+                                 private AvailableModulesList::Listener
 {
 public:
     EnabledModulesItem (Project& p)
@@ -517,91 +516,50 @@ public:
 
     void showPopupMenu (Point<int> p) override
     {
-        auto& enabledModules = project.getEnabledModules();
-        PopupMenu allModules;
+        PopupMenu moduleMenus;
 
-        int index = 100;
+        const auto addModulesSubMenu = [&] (const auto& description, const auto& modules, auto rescan)
+        {
+            PopupMenu menu;
 
-        // JUCE path
-        PopupMenu jucePathModules;
+            for (const auto& mod : modules)
+            {
+                menu.addItem (PopupMenu::Item { mod.first }
+                                  .setID (-1)
+                                  .setEnabled (! project.getEnabledModules().isModuleEnabled (mod.first))
+                                  .setAction ([this, name = mod.first] { project.getEnabledModules().addModuleInteractive (name); }));
+            }
 
-        for (auto& mod : ProjucerApplication::getApp().getJUCEPathModulesList().getAllModules())
-            jucePathModules.addItem (index++, mod.first, ! enabledModules.isModuleEnabled (mod.first));
+            menu.addSeparator();
+            menu.addItem (PopupMenu::Item { "Re-scan path" }.setID (-1).setAction (rescan));
+            moduleMenus.addSubMenu (description, menu);
+        };
 
-        jucePathModules.addSeparator();
-        jucePathModules.addItem (-1, "Re-scan path");
+        addModulesSubMenu ("Global JUCE modules path",
+                           ProjucerApplication::getApp().getJUCEPathModulesList().getAllModules(),
+                           [] { ProjucerApplication::getApp().rescanJUCEPathModules(); });
 
-        allModules.addSubMenu ("Global JUCE modules path", jucePathModules);
+        addModulesSubMenu ("Global user modules path",
+                           ProjucerApplication::getApp().getUserPathsModulesList().getAllModules(),
+                           [] { ProjucerApplication::getApp().rescanUserPathModules(); });
 
-        // User path
-        index = 200;
-        PopupMenu userPathModules;
-
-        for (auto& mod : ProjucerApplication::getApp().getUserPathsModulesList().getAllModules())
-            userPathModules.addItem (index++, mod.first, ! enabledModules.isModuleEnabled (mod.first));
-
-        userPathModules.addSeparator();
-        userPathModules.addItem (-2, "Re-scan path");
-
-        allModules.addSubMenu ("Global user modules path", userPathModules);
-
-        // Exporter path
-        index = 300;
-        PopupMenu exporterPathModules;
-
-        for (auto& mod : project.getExporterPathsModulesList().getAllModules())
-            exporterPathModules.addItem (index++, mod.first, ! enabledModules.isModuleEnabled (mod.first));
-
-        exporterPathModules.addSeparator();
-        exporterPathModules.addItem (-3, "Re-scan path");
-
-        allModules.addSubMenu ("Exporter paths", exporterPathModules);
+        addModulesSubMenu ("Exporter paths",
+                           project.getExporterPathsModulesList().getAllModules(),
+                           [this] { project.rescanExporterPathModules(); });
 
         PopupMenu menu;
-        menu.addSubMenu ("Add a module", allModules);
-
+        menu.addSubMenu ("Add a module", moduleMenus);
         menu.addSeparator();
-        menu.addItem (1001, "Add a module from a specified folder...");
+        menu.addItem (PopupMenu::Item { "Add a module from a specified folder..." }
+                          .setID (-1)
+                          .setAction ([this] { project.getEnabledModules().addModuleFromUserSelectedFile(); }));
 
         launchPopupMenu (menu, p);
     }
 
     void handlePopupMenuResult (int resultCode) override
     {
-        if (resultCode == 1001)
-        {
-            project.getEnabledModules().addModuleFromUserSelectedFile();
-        }
-        else if (resultCode < 0)
-        {
-            if      (resultCode == -1)  ProjucerApplication::getApp().rescanJUCEPathModules();
-            else if (resultCode == -2)  ProjucerApplication::getApp().rescanUserPathModules();
-            else if (resultCode == -3)  project.rescanExporterPathModules();
-        }
-        else if (resultCode > 0)
-        {
-            std::vector<AvailableModulesList::ModuleIDAndFolder> list;
-            int offset = -1;
-
-            if (resultCode < 200)
-            {
-                list = ProjucerApplication::getApp().getJUCEPathModulesList().getAllModules();
-                offset = 100;
-            }
-            else if (resultCode < 300)
-            {
-                list = ProjucerApplication::getApp().getUserPathsModulesList().getAllModules();
-                offset = 200;
-            }
-            else if (resultCode < 400)
-            {
-                list = project.getExporterPathsModulesList().getAllModules();
-                offset = 300;
-            }
-
-            if (offset != -1)
-                project.getEnabledModules().addModuleInteractive (list[(size_t) (resultCode - offset)].first);
-        }
+        jassertquiet (resultCode == -1 || resultCode == 0);
     }
 
     //==============================================================================

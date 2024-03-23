@@ -2,15 +2,15 @@
   ==============================================================================
 
    This file is part of the JUCE library.
-   Copyright (c) 2020 - Raw Material Software Limited
+   Copyright (c) 2022 - Raw Material Software Limited
 
    JUCE is an open source library subject to commercial or open-source
    licensing.
 
-   By using JUCE, you agree to the terms of both the JUCE 6 End-User License
-   Agreement and JUCE Privacy Policy (both effective as of the 16th June 2020).
+   By using JUCE, you agree to the terms of both the JUCE 7 End-User License
+   Agreement and JUCE Privacy Policy.
 
-   End User License Agreement: www.juce.com/juce-6-licence
+   End User License Agreement: www.juce.com/juce-7-licence
    Privacy Policy: www.juce.com/juce-privacy-policy
 
    Or: You may also use this code under the terms of the GPL v3 (see
@@ -29,8 +29,8 @@ class ProjectContentComponent;
 class Project;
 
 //==============================================================================
-class JucerTreeViewBase   : public TreeViewItem,
-                            public TooltipClient
+class JucerTreeViewBase : public TreeViewItem,
+                          public TooltipClient
 {
 public:
     JucerTreeViewBase();
@@ -85,7 +85,7 @@ public:
     // To handle situations where an item gets deleted before openness is
     // restored for it, this OpennessRestorer keeps only a pointer to the
     // topmost tree item.
-    struct WholeTreeOpennessRestorer   : public OpennessRestorer
+    struct WholeTreeOpennessRestorer final : public OpennessRestorer
     {
         WholeTreeOpennessRestorer (TreeViewItem& item)  : OpennessRestorer (getTopLevelItem (item))
         {}
@@ -108,7 +108,6 @@ protected:
 
 private:
     class ItemSelectionTimer;
-    friend class ItemSelectionTimer;
     std::unique_ptr<Timer> delayedSelectionTimer;
 
     void invokeShowDocument();
@@ -117,7 +116,7 @@ private:
 };
 
 //==============================================================================
-class TreePanelBase   : public Component
+class TreePanelBase : public Component
 {
 public:
     TreePanelBase (const Project* p, const String& treeviewID)
@@ -202,7 +201,7 @@ private:
 };
 
 //==============================================================================
-class TreeItemComponent   : public Component
+class TreeItemComponent final : public Component
 {
 public:
     TreeItemComponent (JucerTreeViewBase& i)  : item (&i)

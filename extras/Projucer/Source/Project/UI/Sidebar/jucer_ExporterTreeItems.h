@@ -2,15 +2,15 @@
   ==============================================================================
 
    This file is part of the JUCE library.
-   Copyright (c) 2020 - Raw Material Software Limited
+   Copyright (c) 2022 - Raw Material Software Limited
 
    JUCE is an open source library subject to commercial or open-source
    licensing.
 
-   By using JUCE, you agree to the terms of both the JUCE 6 End-User License
-   Agreement and JUCE Privacy Policy (both effective as of the 16th June 2020).
+   By using JUCE, you agree to the terms of both the JUCE 7 End-User License
+   Agreement and JUCE Privacy Policy.
 
-   End User License Agreement: www.juce.com/juce-6-licence
+   End User License Agreement: www.juce.com/juce-7-licence
    Privacy Policy: www.juce.com/juce-privacy-policy
 
    Or: You may also use this code under the terms of the GPL v3 (see
@@ -27,8 +27,8 @@
 
 
 //==============================================================================
-class ExporterItem   : public ProjectTreeItemBase,
-                       private Value::Listener
+class ExporterItem final : public ProjectTreeItemBase,
+                           private Value::Listener
 {
 public:
     ExporterItem (Project& p, ProjectExporter* e, int index)
@@ -60,7 +60,6 @@ public:
             else if    (e->isAndroid())      return Icon (getIcons().android,      Colours::transparentBlack);
             else if    (e->isCodeBlocks())   return Icon (getIcons().codeBlocks,   Colours::transparentBlack);
             else if    (e->isMakefile())     return Icon (getIcons().linux,        Colours::transparentBlack);
-            else if    (e->isCLion())        return Icon (getIcons().clion,        Colours::transparentBlack);
         }
 
         return Icon();
@@ -78,7 +77,10 @@ public:
 
     void deleteItem() override
     {
-        auto resultCallback = [safeThis = WeakReference<ExporterItem> { this }] (int result)
+        auto options = MessageBoxOptions::makeOptionsOkCancel (MessageBoxIconType::WarningIcon,
+                                                               "Delete Exporter",
+                                                               "Are you sure you want to delete this export target?");
+        messageBox = AlertWindow::showScopedAsync (options, [safeThis = WeakReference { this }] (int result)
         {
             if (safeThis == nullptr || result == 0)
                 return;
@@ -88,15 +90,7 @@ public:
             auto parent = safeThis->exporter->settings.getParent();
             parent.removeChild (safeThis->exporter->settings,
                                 safeThis->project.getUndoManagerFor (parent));
-        };
-
-        AlertWindow::showOkCancelBox (MessageBoxIconType::WarningIcon,
-                                      "Delete Exporter",
-                                      "Are you sure you want to delete this export target?",
-                                      "",
-                                      "",
-                                      nullptr,
-                                      ModalCallbackFunction::create (std::move (resultCallback)));
+        });
     }
 
     void addSubItems() override
@@ -181,6 +175,8 @@ private:
 
     Value targetLocationValue;
 
+    ScopedMessageBox messageBox;
+
     void valueChanged (Value& value) override
     {
         if (value == exporter->getTargetLocationValue())
@@ -188,7 +184,7 @@ private:
     }
 
     //==============================================================================
-    struct SettingsComp  : public Component
+    struct SettingsComp final : public Component
     {
         SettingsComp (ProjectExporter& exp)
             : group (exp.getUniqueName(),
@@ -217,7 +213,7 @@ private:
 
 
 //==============================================================================
-class ConfigItem   : public ProjectTreeItemBase
+class ConfigItem final : public ProjectTreeItemBase
 {
 public:
     ConfigItem (const ProjectExporter::BuildConfiguration::Ptr& conf, ProjectExporter& e)
@@ -244,13 +240,10 @@ public:
 
     void deleteItem() override
     {
-        AlertWindow::showOkCancelBox (MessageBoxIconType::WarningIcon,
-                                      "Delete Configuration",
-                                      "Are you sure you want to delete this configuration?",
-                                      "",
-                                      "",
-                                      nullptr,
-                                      ModalCallbackFunction::create ([parent = WeakReference<ConfigItem> { this }] (int result)
+        auto options = MessageBoxOptions::makeOptionsOkCancel (MessageBoxIconType::WarningIcon,
+                                                               "Delete Configuration",
+                                                               "Are you sure you want to delete this configuration?");
+        messageBox = AlertWindow::showScopedAsync (options, [parent = WeakReference { this }] (int result)
         {
             if (parent == nullptr)
                 return;
@@ -260,7 +253,7 @@ public:
 
             parent->closeSettingsPage();
             parent->config->removeFromExporter();
-        }));
+        });
     }
 
     void showPopupMenu (Point<int> p) override
@@ -294,9 +287,10 @@ private:
     ProjectExporter::BuildConfiguration::Ptr config;
     ProjectExporter& exporter;
     ValueTree configTree;
+    ScopedMessageBox messageBox;
 
     //==============================================================================
-    class SettingsComp  : public Component
+    class SettingsComp final : public Component
     {
     public:
         SettingsComp (ProjectExporter::BuildConfiguration& conf)
@@ -322,11 +316,10 @@ private:
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (ConfigItem)
     JUCE_DECLARE_WEAK_REFERENCEABLE (ConfigItem)
-
 };
 
 //==============================================================================
-class ExportersTreeRoot    : public ProjectTreeItemBase
+class ExportersTreeRoot final : public ProjectTreeItemBase
 {
 public:
     ExportersTreeRoot (Project& p)

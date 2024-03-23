@@ -2,15 +2,15 @@
   ==============================================================================
 
    This file is part of the JUCE library.
-   Copyright (c) 2020 - Raw Material Software Limited
+   Copyright (c) 2022 - Raw Material Software Limited
 
    JUCE is an open source library subject to commercial or open-source
    licensing.
 
-   By using JUCE, you agree to the terms of both the JUCE 6 End-User License
-   Agreement and JUCE Privacy Policy (both effective as of the 16th June 2020).
+   By using JUCE, you agree to the terms of both the JUCE 7 End-User License
+   Agreement and JUCE Privacy Policy.
 
-   End User License Agreement: www.juce.com/juce-6-licence
+   End User License Agreement: www.juce.com/juce-7-licence
    Privacy Policy: www.juce.com/juce-privacy-policy
 
    Or: You may also use this code under the terms of the GPL v3 (see
@@ -28,7 +28,7 @@
 #include "../../Utility/UI/PropertyComponents/jucer_ColourPropertyComponent.h"
 
 //==============================================================================
-class EditorColourSchemeWindowComponent    : public Component
+class EditorColourSchemeWindowComponent final : public Component
 {
 public:
     EditorColourSchemeWindowComponent()
@@ -62,8 +62,8 @@ private:
     //==============================================================================
     struct AppearanceEditor
     {
-        struct FontScanPanel   : public Component,
-                                 private Timer
+        struct FontScanPanel final : public Component,
+                                     private Timer
         {
             FontScanPanel()
             {
@@ -121,7 +121,7 @@ private:
         };
 
         //==============================================================================
-        struct EditorPanel  : public Component
+        struct EditorPanel final : public Component
         {
             EditorPanel()
                 : loadButton ("Load Scheme..."),
@@ -282,7 +282,7 @@ private:
         };
 
         //==============================================================================
-        struct FontNameValueSource   : public ValueSourceFilter
+        struct FontNameValueSource final : public ValueSourceFilter
         {
             FontNameValueSource (const Value& source)  : ValueSourceFilter (source) {}
 
@@ -321,7 +321,7 @@ private:
         };
 
         //==============================================================================
-        struct FontSizeValueSource   : public ValueSourceFilter
+        struct FontSizeValueSource final : public ValueSourceFilter
         {
             FontSizeValueSource (const Value& source)  : ValueSourceFilter (source) {}
 

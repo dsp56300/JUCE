@@ -2,7 +2,7 @@
   ==============================================================================
 
    This file is part of the JUCE library.
-   Copyright (c) 2020 - Raw Material Software Limited
+   Copyright (c) 2022 - Raw Material Software Limited
 
    JUCE is an open source library subject to commercial or open-source
    licensing.
@@ -41,7 +41,7 @@ public:
         @param initialSize          the size of block to create
         @param initialiseToZero     whether to clear the memory or just leave it uninitialised
     */
-    MemoryBlock (const size_t initialSize,
+    MemoryBlock (size_t initialSize,
                  bool initialiseToZero = false);
 
     /** Creates a copy of another memory block. */
@@ -138,7 +138,7 @@ public:
                                             uninitialised
         @see ensureSize
     */
-    void setSize (const size_t newSize,
+    void setSize (size_t newSize,
                   bool initialiseNewSpaceToZero = false);
 
     /** Increases the block's size only if it's smaller than a given size.
@@ -150,7 +150,7 @@ public:
                                             uninitialised
         @see setSize
     */
-    void ensureSize (const size_t minimumSize,
+    void ensureSize (size_t minimumSize,
                      bool initialiseNewSpaceToZero = false);
 
     /** Frees all the blocks data, setting its size to 0. */

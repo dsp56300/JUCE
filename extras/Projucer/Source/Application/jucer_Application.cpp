@@ -2,15 +2,15 @@
   ==============================================================================
 
    This file is part of the JUCE library.
-   Copyright (c) 2020 - Raw Material Software Limited
+   Copyright (c) 2022 - Raw Material Software Limited
 
    JUCE is an open source library subject to commercial or open-source
    licensing.
 
-   By using JUCE, you agree to the terms of both the JUCE 6 End-User License
-   Agreement and JUCE Privacy Policy (both effective as of the 16th June 2020).
+   By using JUCE, you agree to the terms of both the JUCE 7 End-User License
+   Agreement and JUCE Privacy Policy.
 
-   End User License Agreement: www.juce.com/juce-6-licence
+   End User License Agreement: www.juce.com/juce-7-licence
    Privacy Policy: www.juce.com/juce-privacy-policy
 
    Or: You may also use this code under the terms of the GPL v3 (see
@@ -29,7 +29,7 @@ void registerGUIEditorCommands();
 
 
 //==============================================================================
-struct ProjucerApplication::MainMenuModel  : public MenuBarModel
+struct ProjucerApplication::MainMenuModel final : public MenuBarModel
 {
     MainMenuModel()
     {
@@ -199,7 +199,7 @@ void ProjucerApplication::shutdown()
     deleteLogger();
 }
 
-struct AsyncQuitRetrier  : private Timer
+struct AsyncQuitRetrier final : private Timer
 {
     AsyncQuitRetrier()   { startTimer (500); }
 
@@ -501,7 +501,7 @@ PopupMenu ProjucerApplication::createDocumentMenu()
 
     for (int i = 0; i < numDocs; ++i)
     {
-        OpenDocumentManager::Document* doc = openDocumentManager.getOpenDocument(i);
+        OpenDocumentManager::Document* doc = openDocumentManager.getOpenDocument (i);
         menu.addItem (activeDocumentsBaseID + i, doc->getName());
     }
 
@@ -1098,13 +1098,14 @@ void ProjucerApplication::createNewProjectFromClipboard()
     tempFile.create();
     tempFile.appendText (SystemClipboard::getTextFromClipboard());
 
-    auto cleanup = [tempFile] (String errorString)
+    auto cleanup = [parent = WeakReference { this }, tempFile] (String errorString)
     {
-        if (errorString.isNotEmpty())
-        {
-            AlertWindow::showMessageBoxAsync (MessageBoxIconType::WarningIcon, "Error", errorString);
-            tempFile.deleteFile();
-        }
+        if (parent == nullptr || errorString.isEmpty())
+            return;
+
+        auto options = MessageBoxOptions::makeOptionsOk (MessageBoxIconType::WarningIcon, "Error", errorString);
+        parent->messageBox = AlertWindow::showScopedAsync (options, nullptr);
+        tempFile.deleteFile();
     };
 
     if (! isPIPFile (tempFile))
@@ -1113,7 +1114,7 @@ void ProjucerApplication::createNewProjectFromClipboard()
         return;
     }
 
-    openFile (tempFile, [parent = WeakReference<ProjucerApplication> { this }, cleanup] (bool openedSuccessfully)
+    openFile (tempFile, [parent = WeakReference { this }, cleanup] (bool openedSuccessfully)
     {
         if (parent == nullptr)
             return;
@@ -1155,7 +1156,7 @@ void ProjucerApplication::saveAllDocuments()
     openDocumentManager.saveAllSyncWithoutAsking();
 
     for (int i = 0; i < mainWindowList.windows.size(); ++i)
-        if (auto* pcc = mainWindowList.windows.getUnchecked(i)->getProjectContentComponent())
+        if (auto* pcc = mainWindowList.windows.getUnchecked (i)->getProjectContentComponent())
             pcc->refreshProjectTreeFileStatuses();
 }
 
@@ -1351,7 +1352,7 @@ void ProjucerApplication::deleteLogger()
                 files.addUsingDefaultSort (f);
 
             for (int i = 0; i < files.size() - maxNumLogFilesToKeep; ++i)
-                files.getReference(i).file.deleteFile();
+                files.getReference (i).file.deleteFile();
         }
     }
 

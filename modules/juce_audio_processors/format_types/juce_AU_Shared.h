@@ -2,15 +2,15 @@
   ==============================================================================
 
    This file is part of the JUCE library.
-   Copyright (c) 2020 - Raw Material Software Limited
+   Copyright (c) 2022 - Raw Material Software Limited
 
    JUCE is an open source library subject to commercial or open-source
    licensing.
 
-   By using JUCE, you agree to the terms of both the JUCE 6 End-User License
-   Agreement and JUCE Privacy Policy (both effective as of the 16th June 2020).
+   By using JUCE, you agree to the terms of both the JUCE 7 End-User License
+   Agreement and JUCE Privacy Policy.
 
-   End User License Agreement: www.juce.com/juce-6-licence
+   End User License Agreement: www.juce.com/juce-7-licence
    Privacy Policy: www.juce.com/juce-privacy-policy
 
    Or: You may also use this code under the terms of the GPL v3 (see
@@ -23,15 +23,29 @@
   ==============================================================================
 */
 
+#ifndef DOXYGEN
+
 // This macro can be set if you need to override this internal name for some reason..
 #ifndef JUCE_STATE_DICTIONARY_KEY
  #define JUCE_STATE_DICTIONARY_KEY   "jucePluginState"
 #endif
 
+
+#if (JUCE_IOS && defined (__IPHONE_15_0) && __IPHONE_OS_VERSION_MAX_ALLOWED >= __IPHONE_15_0) \
+   || (JUCE_MAC && defined (MAC_OS_VERSION_12_0) && MAC_OS_X_VERSION_MAX_ALLOWED >= MAC_OS_VERSION_12_0)
+ #define JUCE_APPLE_MIDI_EVENT_LIST_SUPPORTED 1
+#else
+ #define JUCE_APPLE_MIDI_EVENT_LIST_SUPPORTED 0
+#endif
+
+#include <juce_audio_basics/midi/juce_MidiDataConcatenator.h>
+
+#if JUCE_APPLE_MIDI_EVENT_LIST_SUPPORTED
+ #include <juce_audio_basics/midi/ump/juce_UMP.h>
+#endif
+
 namespace juce
 {
-
-#ifndef DOXYGEN
 
 struct AudioUnitHelpers
 {
@@ -157,13 +171,10 @@ struct AudioUnitHelpers
 
         AudioBuffer<float>& getBuffer (UInt32 frames) noexcept
         {
-           #if JUCE_DEBUG
-            for (int i = 0; i < (int) channels.size(); ++i)
-                jassert (channels[(size_t) i] != nullptr);
-           #endif
+            jassert (std::none_of (channels.begin(), channels.end(), [] (auto* x) { return x == nullptr; }));
 
-            if (! channels.empty())
-                mutableBuffer.setDataToReferTo (channels.data(), (int) channels.size(), static_cast<int> (frames));
+            const auto channelPtr = channels.empty() ? scratch.getArrayOfWritePointers() : channels.data();
+            mutableBuffer.setDataToReferTo (channelPtr, (int) channels.size(), static_cast<int> (frames));
 
             return mutableBuffer;
         }
@@ -362,7 +373,10 @@ struct AudioUnitHelpers
         }
 
         auto layout = processor.getBusesLayout();
-        auto maxNumChanToCheckFor = 9;
+
+        // The 'standard' layout with the most channels defined is AudioChannelSet::create9point1point6().
+        // This value should be updated if larger standard channel layouts are added in the future.
+        constexpr auto maxNumChanToCheckFor = 16;
 
         auto defaultInputs  = processor.getChannelCountOfBus (true,  0);
         auto defaultOutputs = processor.getChannelCountOfBus (false, 0);
@@ -563,6 +577,6 @@ struct AudioUnitHelpers
     }
 };
 
-#endif
-
 } // namespace juce
+
+#endif

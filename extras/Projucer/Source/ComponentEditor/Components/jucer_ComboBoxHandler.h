@@ -2,15 +2,15 @@
   ==============================================================================
 
    This file is part of the JUCE library.
-   Copyright (c) 2020 - Raw Material Software Limited
+   Copyright (c) 2022 - Raw Material Software Limited
 
    JUCE is an open source library subject to commercial or open-source
    licensing.
 
-   By using JUCE, you agree to the terms of both the JUCE 6 End-User License
-   Agreement and JUCE Privacy Policy (both effective as of the 16th June 2020).
+   By using JUCE, you agree to the terms of both the JUCE 7 End-User License
+   Agreement and JUCE Privacy Policy.
 
-   End User License Agreement: www.juce.com/juce-6-licence
+   End User License Agreement: www.juce.com/juce-7-licence
    Privacy Policy: www.juce.com/juce-privacy-policy
 
    Or: You may also use this code under the terms of the GPL v3 (see
@@ -197,13 +197,13 @@ private:
         {
         }
 
-        void setState (bool newState)
+        void setState (bool newState) override
         {
             document.perform (new ComboEditableChangeAction (component, *document.getComponentLayout(), newState),
                               "Change combo box editability");
         }
 
-        bool getState() const
+        bool getState() const override
         {
             return component->isTextEditable();
         }
@@ -219,7 +219,7 @@ private:
                 oldState = comp->isTextEditable();
             }
 
-            bool perform()
+            bool perform() override
             {
                 showCorrectTab();
                 getComponent()->setEditableText (newState);
@@ -227,7 +227,7 @@ private:
                 return true;
             }
 
-            bool undo()
+            bool undo() override
             {
                 showCorrectTab();
                 getComponent()->setEditableText (oldState);
@@ -250,13 +250,13 @@ private:
         {
         }
 
-        void setJustification (Justification newJustification)
+        void setJustification (Justification newJustification) override
         {
             document.perform (new ComboJustifyChangeAction (component, *document.getComponentLayout(), newJustification),
                               "Change combo box justification");
         }
 
-        Justification getJustification() const        { return component->getJustificationType(); }
+        Justification getJustification() const override        { return component->getJustificationType(); }
 
     private:
         ComboBox* const component;
@@ -272,7 +272,7 @@ private:
             {
             }
 
-            bool perform()
+            bool perform() override
             {
                 showCorrectTab();
                 getComponent()->setJustificationType (newState);
@@ -280,7 +280,7 @@ private:
                 return true;
             }
 
-            bool undo()
+            bool undo() override
             {
                 showCorrectTab();
                 getComponent()->setJustificationType (oldState);
@@ -322,7 +322,7 @@ private:
                 oldState = comp->getProperties() ["items"];
             }
 
-            bool perform()
+            bool perform() override
             {
                 showCorrectTab();
                 getComponent()->getProperties().set ("items", newState);
@@ -331,7 +331,7 @@ private:
                 return true;
             }
 
-            bool undo()
+            bool undo() override
             {
                 showCorrectTab();
                 getComponent()->getProperties().set ("items", oldState);
@@ -374,7 +374,7 @@ private:
                 oldState = comp->getTextWhenNothingSelected();
             }
 
-            bool perform()
+            bool perform() override
             {
                 showCorrectTab();
                 getComponent()->setTextWhenNothingSelected (newState);
@@ -382,7 +382,7 @@ private:
                 return true;
             }
 
-            bool undo()
+            bool undo() override
             {
                 showCorrectTab();
                 getComponent()->setTextWhenNothingSelected (oldState);
@@ -424,7 +424,7 @@ private:
                 oldState = comp->getTextWhenNoChoicesAvailable();
             }
 
-            bool perform()
+            bool perform() override
             {
                 showCorrectTab();
                 getComponent()->setTextWhenNoChoicesAvailable (newState);
@@ -432,7 +432,7 @@ private:
                 return true;
             }
 
-            bool undo()
+            bool undo() override
             {
                 showCorrectTab();
                 getComponent()->setTextWhenNoChoicesAvailable (oldState);

@@ -2,7 +2,7 @@
   ==============================================================================
 
    This file is part of the JUCE examples.
-   Copyright (c) 2020 - Raw Material Software Limited
+   Copyright (c) 2022 - Raw Material Software Limited
 
    The code included in this file is provided under the terms of the ISC license
    http://www.isc.org/downloads/software-support-policy/isc-license. Permission
@@ -218,11 +218,7 @@ inline Path getJUCELogoPath()
 // 0.0 and 1.0 at a random speed
 struct BouncingNumber
 {
-    BouncingNumber()
-        : speed (0.0004 + 0.0007 * Random::getSystemRandom().nextDouble()),
-          phase (Random::getSystemRandom().nextDouble())
-    {
-    }
+    virtual ~BouncingNumber() = default;
 
     float getValue() const
     {
@@ -231,15 +227,42 @@ struct BouncingNumber
     }
 
 protected:
-    double speed, phase;
+    double speed = 0.0004 + 0.0007 * Random::getSystemRandom().nextDouble(),
+           phase = Random::getSystemRandom().nextDouble();
 };
 
-struct SlowerBouncingNumber  : public BouncingNumber
+struct SlowerBouncingNumber final : public BouncingNumber
 {
     SlowerBouncingNumber()
     {
         speed *= 0.3;
     }
 };
+
+inline std::unique_ptr<InputSource> makeInputSource (const URL& url)
+{
+    if (const auto doc = AndroidDocument::fromDocument (url))
+        return std::make_unique<AndroidDocumentInputSource> (doc);
+
+   #if ! JUCE_IOS
+    if (url.isLocalFile())
+        return std::make_unique<FileInputSource> (url.getLocalFile());
+   #endif
+
+    return std::make_unique<URLInputSource> (url);
+}
+
+inline std::unique_ptr<OutputStream> makeOutputStream (const URL& url)
+{
+    if (const auto doc = AndroidDocument::fromDocument (url))
+        return doc.createOutputStream();
+
+   #if ! JUCE_IOS
+    if (url.isLocalFile())
+        return url.getLocalFile().createOutputStream();
+   #endif
+
+    return url.createOutputStream();
+}
 
 #endif   // PIP_DEMO_UTILITIES_INCLUDED

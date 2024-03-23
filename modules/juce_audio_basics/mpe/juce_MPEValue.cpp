@@ -2,7 +2,7 @@
   ==============================================================================
 
    This file is part of the JUCE library.
-   Copyright (c) 2020 - Raw Material Software Limited
+   Copyright (c) 2022 - Raw Material Software Limited
 
    JUCE is an open source library subject to commercial or open-source
    licensing.
@@ -99,7 +99,7 @@ bool MPEValue::operator!= (const MPEValue& other) const noexcept
 //==============================================================================
 #if JUCE_UNIT_TESTS
 
-class MPEValueTests  : public UnitTest
+class MPEValueTests final : public UnitTest
 {
 public:
     MPEValueTests()

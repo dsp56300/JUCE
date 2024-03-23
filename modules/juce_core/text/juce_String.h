@@ -2,7 +2,7 @@
   ==============================================================================
 
    This file is part of the JUCE library.
-   Copyright (c) 2020 - Raw Material Software Limited
+   Copyright (c) 2022 - Raw Material Software Limited
 
    JUCE is an open source library subject to commercial or open-source
    licensing.
@@ -24,7 +24,7 @@
  // Annoyingly we can only forward-declare a typedef by forward-declaring the
  // aliased type
  #if __has_attribute(objc_bridge)
-  #define JUCE_CF_BRIDGED_TYPE(T) __attribute__((objc_bridge(T)))
+  #define JUCE_CF_BRIDGED_TYPE(T) __attribute__ ((objc_bridge (T)))
  #else
   #define JUCE_CF_BRIDGED_TYPE(T)
  #endif
@@ -1117,7 +1117,7 @@ public:
     {
         jassert (numberOfSignificantFigures > 0);
 
-        if (number == 0)
+        if (exactlyEqual (number, DecimalType()))
         {
             if (numberOfSignificantFigures > 1)
             {

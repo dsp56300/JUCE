@@ -2,7 +2,7 @@
   ==============================================================================
 
    This file is part of the JUCE library.
-   Copyright (c) 2020 - Raw Material Software Limited
+   Copyright (c) 2022 - Raw Material Software Limited
 
    JUCE is an open source library subject to commercial or open-source
    licensing.
@@ -215,7 +215,7 @@ public:
     bool sendMessageToSlave (const MemoryBlock& mb) { return sendMessageToWorker (mb); }
 
 private:
-    std::unique_ptr<ChildProcess> childProcess;
+    std::shared_ptr<ChildProcess> childProcess;
 
     struct Connection;
     std::unique_ptr<Connection> connection;

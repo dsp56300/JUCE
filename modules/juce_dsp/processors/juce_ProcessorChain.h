@@ -2,15 +2,15 @@
   ==============================================================================
 
    This file is part of the JUCE library.
-   Copyright (c) 2020 - Raw Material Software Limited
+   Copyright (c) 2022 - Raw Material Software Limited
 
    JUCE is an open source library subject to commercial or open-source
    licensing.
 
-   By using JUCE, you agree to the terms of both the JUCE 6 End-User License
-   Agreement and JUCE Privacy Policy (both effective as of the 16th June 2020).
+   By using JUCE, you agree to the terms of both the JUCE 7 End-User License
+   Agreement and JUCE Privacy Policy.
 
-   End User License Agreement: www.juce.com/juce-6-licence
+   End User License Agreement: www.juce.com/juce-7-licence
    Privacy Policy: www.juce.com/juce-privacy-policy
 
    Or: You may also use this code under the terms of the GPL v3 (see
@@ -23,9 +23,7 @@
   ==============================================================================
 */
 
-namespace juce
-{
-namespace dsp
+namespace juce::dsp
 {
 
 //==============================================================================
@@ -38,11 +36,11 @@ namespace detail
     template <typename Fn, typename Tuple, size_t... Ix>
     constexpr void forEachInTuple (Fn&& fn, Tuple&& tuple, std::index_sequence<Ix...>)
     {
-        (void) std::initializer_list<int> { ((void) fn (std::get<Ix> (tuple), std::integral_constant<size_t, Ix>()), 0)... };
+        (fn (std::get<Ix> (tuple), std::integral_constant<size_t, Ix>()), ...);
     }
 
     template <typename T>
-    using TupleIndexSequence = std::make_index_sequence<std::tuple_size<std::remove_cv_t<std::remove_reference_t<T>>>::value>;
+    using TupleIndexSequence = std::make_index_sequence<std::tuple_size_v<std::remove_cv_t<std::remove_reference_t<T>>>>;
 
     template <typename Fn, typename Tuple>
     constexpr void forEachInTuple (Fn&& fn, Tuple&& tuple)
@@ -50,12 +48,8 @@ namespace detail
         forEachInTuple (std::forward<Fn> (fn), std::forward<Tuple> (tuple), TupleIndexSequence<Tuple>{});
     }
 
-    // This could be a template variable, but that code causes an internal compiler error in MSVC 19.00.24215
     template <typename Context, size_t Ix>
-    struct UseContextDirectly
-    {
-        static constexpr auto value = ! Context::usesSeparateInputAndOutputBlocks() || Ix == 0;
-    };
+    inline constexpr auto useContextDirectly = ! Context::usesSeparateInputAndOutputBlocks() || Ix == 0;
 }
 #endif
 
@@ -103,27 +97,28 @@ public:
     }
 
 private:
-    template <typename Context, typename Proc, size_t Ix, std::enable_if_t<! detail::UseContextDirectly<Context, Ix>::value, int> = 0>
+    template <typename Context, typename Proc, size_t Ix>
     void processOne (const Context& context, Proc& proc, std::integral_constant<size_t, Ix>) noexcept
     {
-        jassert (context.getOutputBlock().getNumChannels() == context.getInputBlock().getNumChannels());
-        ProcessContextReplacing<typename Context::SampleType> replacingContext (context.getOutputBlock());
-        replacingContext.isBypassed = (bypassed[Ix] || context.isBypassed);
+        if constexpr (detail::useContextDirectly<Context, Ix>)
+        {
+            auto contextCopy = context;
+            contextCopy.isBypassed = (bypassed[Ix] || context.isBypassed);
 
-        proc.process (replacingContext);
-    }
+            proc.process (contextCopy);
+        }
+        else
+        {
+            jassert (context.getOutputBlock().getNumChannels() == context.getInputBlock().getNumChannels());
+            ProcessContextReplacing<typename Context::SampleType> replacingContext (context.getOutputBlock());
+            replacingContext.isBypassed = (bypassed[Ix] || context.isBypassed);
 
-    template <typename Context, typename Proc, size_t Ix, std::enable_if_t<detail::UseContextDirectly<Context, Ix>::value, int> = 0>
-    void processOne (const Context& context, Proc& proc, std::integral_constant<size_t, Ix>) noexcept
-    {
-        auto contextCopy = context;
-        contextCopy.isBypassed = (bypassed[Ix] || context.isBypassed);
-
-        proc.process (contextCopy);
+            proc.process (replacingContext);
+        }
     }
 
     std::tuple<Processors...> processors;
-    std::array<bool, sizeof...(Processors)> bypassed { {} };
+    std::array<bool, sizeof... (Processors)> bypassed { {} };
 };
 
 /** Non-member equivalent of ProcessorChain::get which avoids awkward
@@ -162,8 +157,7 @@ inline bool isBypassed (const ProcessorChain<Processors...>& chain) noexcept
     return chain.template isBypassed<Index>();
 }
 
-} // namespace dsp
-} // namespace juce
+} // namespace juce::dsp
 
 #ifndef DOXYGEN
 namespace std

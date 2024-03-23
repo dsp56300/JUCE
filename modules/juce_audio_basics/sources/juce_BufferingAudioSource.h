@@ -2,7 +2,7 @@
   ==============================================================================
 
    This file is part of the JUCE library.
-   Copyright (c) 2020 - Raw Material Software Limited
+   Copyright (c) 2022 - Raw Material Software Limited
 
    JUCE is an open source library subject to commercial or open-source
    licensing.
@@ -95,7 +95,7 @@ public:
 
         This is useful for offline rendering.
     */
-    bool waitForNextAudioBlockReady (const AudioSourceChannelInfo& info, const uint32 timeout);
+    bool waitForNextAudioBlockReady (const AudioSourceChannelInfo& info, uint32 timeout);
 
 private:
     //==============================================================================

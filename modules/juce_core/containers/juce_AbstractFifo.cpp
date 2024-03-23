@@ -2,7 +2,7 @@
   ==============================================================================
 
    This file is part of the JUCE library.
-   Copyright (c) 2020 - Raw Material Software Limited
+   Copyright (c) 2022 - Raw Material Software Limited
 
    JUCE is an open source library subject to commercial or open-source
    licensing.
@@ -168,14 +168,14 @@ AbstractFifo::ScopedWrite AbstractFifo::write (int numToWrite) noexcept    { ret
 //==============================================================================
 #if JUCE_UNIT_TESTS
 
-class AbstractFifoTests  : public UnitTest
+class AbstractFifoTests final : public UnitTest
 {
 public:
     AbstractFifoTests()
         : UnitTest ("Abstract Fifo", UnitTestCategories::containers)
     {}
 
-    struct WriteThread  : public Thread
+    struct WriteThread final : public Thread
     {
         WriteThread (AbstractFifo& f, int* b, Random rng)
             : Thread ("fifo writer"), fifo (f), buffer (b), random (rng)
@@ -183,12 +183,12 @@ public:
             startThread();
         }
 
-        ~WriteThread()
+        ~WriteThread() override
         {
             stopThread (5000);
         }
 
-        void run()
+        void run() override
         {
             int n = 0;
 

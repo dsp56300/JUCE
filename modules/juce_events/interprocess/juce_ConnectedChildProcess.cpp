@@ -2,7 +2,7 @@
   ==============================================================================
 
    This file is part of the JUCE library.
-   Copyright (c) 2020 - Raw Material Software Limited
+   Copyright (c) 2022 - Raw Material Software Limited
 
    JUCE is an open source library subject to commercial or open-source
    licensing.
@@ -43,15 +43,15 @@ static String getCommandLinePrefix (const String& commandLineUniqueID)
 //==============================================================================
 // This thread sends and receives ping messages every second, so that it
 // can find out if the other process has stopped running.
-struct ChildProcessPingThread  : public Thread,
-                                 private AsyncUpdater
+struct ChildProcessPingThread : public Thread,
+                                private AsyncUpdater
 {
     ChildProcessPingThread (int timeout)  : Thread ("IPC ping"), timeoutMs (timeout)
     {
         pingReceived();
     }
 
-    void startPinging()                     { startThread (4); }
+    void startPinging()                     { startThread (Priority::low); }
 
     void pingReceived() noexcept            { countdown = timeoutMs / 1000 + 1; }
     void triggerConnectionLostMessage()     { triggerAsyncUpdate(); }
@@ -60,6 +60,8 @@ struct ChildProcessPingThread  : public Thread,
     virtual void pingFailed() = 0;
 
     int timeoutMs;
+
+    using AsyncUpdater::cancelPendingUpdate;
 
 private:
     Atomic<int> countdown;
@@ -84,8 +86,8 @@ private:
 };
 
 //==============================================================================
-struct ChildProcessCoordinator::Connection  : public InterprocessConnection,
-                                              private ChildProcessPingThread
+struct ChildProcessCoordinator::Connection final : public InterprocessConnection,
+                                                   private ChildProcessPingThread
 {
     Connection (ChildProcessCoordinator& m, const String& pipeName, int timeout)
         : InterprocessConnection (false, magicCoordWorkerConnectionHeader),
@@ -97,6 +99,7 @@ struct ChildProcessCoordinator::Connection  : public InterprocessConnection,
 
     ~Connection() override
     {
+        cancelPendingUpdate();
         stopThread (10000);
     }
 
@@ -161,14 +164,26 @@ bool ChildProcessCoordinator::launchWorkerProcess (const File& executable, const
     args.add (executable.getFullPathName());
     args.add (getCommandLinePrefix (commandLineUniqueID) + pipeName);
 
-    childProcess.reset (new ChildProcess());
+    childProcess = [&]() -> std::shared_ptr<ChildProcess>
+    {
+        if ((SystemStats::getOperatingSystemType() & SystemStats::Linux) != 0)
+            return ChildProcessManager::getInstance()->createAndStartManagedChildProcess (args, streamFlags);
 
-    if (childProcess->start (args, streamFlags))
+        auto p = std::make_shared<ChildProcess>();
+
+        if (p->start (args, streamFlags))
+            return p;
+
+        return nullptr;
+    }();
+
+    if (childProcess != nullptr)
     {
         connection.reset (new Connection (*this, pipeName, timeoutMs <= 0 ? defaultTimeoutMs : timeoutMs));
 
         if (connection->isConnected())
         {
+            connection->startPinging();
             sendMessageToWorker ({ startMessage, specialMessageSize });
             return true;
         }
@@ -192,8 +207,8 @@ void ChildProcessCoordinator::killWorkerProcess()
 }
 
 //==============================================================================
-struct ChildProcessWorker::Connection  : public InterprocessConnection,
-                                         private ChildProcessPingThread
+struct ChildProcessWorker::Connection final : public InterprocessConnection,
+                                              private ChildProcessPingThread
 {
     Connection (ChildProcessWorker& p, const String& pipeName, int timeout)
         : InterprocessConnection (false, magicCoordWorkerConnectionHeader),
@@ -205,6 +220,7 @@ struct ChildProcessWorker::Connection  : public InterprocessConnection,
 
     ~Connection() override
     {
+        cancelPendingUpdate();
         stopThread (10000);
         disconnect();
     }

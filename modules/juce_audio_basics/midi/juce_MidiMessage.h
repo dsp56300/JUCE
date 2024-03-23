@@ -2,7 +2,7 @@
   ==============================================================================
 
    This file is part of the JUCE library.
-   Copyright (c) 2020 - Raw Material Software Limited
+   Copyright (c) 2022 - Raw Material Software Limited
 
    JUCE is an open source library subject to commercial or open-source
    licensing.
@@ -217,6 +217,13 @@ public:
         @see getSysExData
     */
     int getSysExDataSize() const noexcept;
+
+    /** Returns a span that bounds the sysex body bytes contained in this message. */
+    Span<const std::byte> getSysExDataSpan() const noexcept
+    {
+        return { reinterpret_cast<const std::byte*> (getSysExData()),
+                 (size_t) getSysExDataSize() };
+    }
 
     //==============================================================================
     /** Returns true if this message is a 'key-down' event.
@@ -855,6 +862,10 @@ public:
     static MidiMessage createSysExMessage (const void* sysexData,
                                            int dataSize);
 
+    /** Creates a system-exclusive message.
+        The data passed in is wrapped with header and tail bytes of 0xf0 and 0xf7.
+    */
+    static MidiMessage createSysExMessage (Span<const std::byte> data);
 
     //==============================================================================
    #ifndef DOXYGEN

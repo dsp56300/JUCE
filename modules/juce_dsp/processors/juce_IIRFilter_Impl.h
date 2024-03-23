@@ -2,15 +2,15 @@
   ==============================================================================
 
    This file is part of the JUCE library.
-   Copyright (c) 2020 - Raw Material Software Limited
+   Copyright (c) 2022 - Raw Material Software Limited
 
    JUCE is an open source library subject to commercial or open-source
    licensing.
 
-   By using JUCE, you agree to the terms of both the JUCE 6 End-User License
-   Agreement and JUCE Privacy Policy (both effective as of the 16th June 2020).
+   By using JUCE, you agree to the terms of both the JUCE 7 End-User License
+   Agreement and JUCE Privacy Policy.
 
-   End User License Agreement: www.juce.com/juce-6-licence
+   End User License Agreement: www.juce.com/juce-7-licence
    Privacy Policy: www.juce.com/juce-privacy-policy
 
    Or: You may also use this code under the terms of the GPL v3 (see
@@ -23,11 +23,7 @@
   ==============================================================================
 */
 
-namespace juce
-{
-namespace dsp
-{
-namespace IIR
+namespace juce::dsp::IIR
 {
 
 #ifndef DOXYGEN
@@ -39,8 +35,9 @@ Coefficients<NumericType>& Coefficients<NumericType>::assignImpl (const NumericT
     static_assert (Num % 2 == 0, "Must supply an even number of coefficients");
     const auto a0Index = Num / 2;
     const auto a0 = values[a0Index];
-    const auto a0Inv = a0 != NumericType() ? static_cast<NumericType> (1) / values[a0Index]
-                                           : NumericType();
+    const auto a0Inv = ! approximatelyEqual (a0, NumericType())
+                     ? static_cast<NumericType> (1) / values[a0Index]
+                     : NumericType();
 
     coefficients.clearQuick();
     coefficients.ensureStorageAllocated ((int) jmax ((size_t) 8, Num));
@@ -89,7 +86,7 @@ template <typename SampleType>
 template <typename ProcessContext, bool bypassed>
 void Filter<SampleType>::processInternal (const ProcessContext& context) noexcept
 {
-    static_assert (std::is_same<typename ProcessContext::SampleType, SampleType>::value,
+    static_assert (std::is_same_v<typename ProcessContext::SampleType, SampleType>,
                    "The sample-type of the IIR filter must match the sample-type supplied to this process callback");
     check();
 
@@ -240,6 +237,4 @@ void Filter<SampleType>::check()
 
 #endif
 
-} // namespace IIR
-} // namespace dsp
-} // namespace juce
+} // namespace juce::dsp::IIR

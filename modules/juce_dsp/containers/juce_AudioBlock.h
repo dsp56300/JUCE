@@ -2,15 +2,15 @@
   ==============================================================================
 
    This file is part of the JUCE library.
-   Copyright (c) 2020 - Raw Material Software Limited
+   Copyright (c) 2022 - Raw Material Software Limited
 
    JUCE is an open source library subject to commercial or open-source
    licensing.
 
-   By using JUCE, you agree to the terms of both the JUCE 6 End-User License
-   Agreement and JUCE Privacy Policy (both effective as of the 16th June 2020).
+   By using JUCE, you agree to the terms of both the JUCE 7 End-User License
+   Agreement and JUCE Privacy Policy.
 
-   End User License Agreement: www.juce.com/juce-6-licence
+   End User License Agreement: www.juce.com/juce-7-licence
    Privacy Policy: www.juce.com/juce-privacy-policy
 
    Or: You may also use this code under the terms of the GPL v3 (see
@@ -23,15 +23,13 @@
   ==============================================================================
 */
 
-namespace juce
-{
-namespace dsp
+namespace juce::dsp
 {
 
 #ifndef DOXYGEN
 namespace SampleTypeHelpers // Internal classes needed for handling sample type classes
 {
-    template <typename T, bool = std::is_floating_point<T>::value>
+    template <typename T, bool = std::is_floating_point_v<T>>
     struct ElementType
     {
         using Type = T;
@@ -71,10 +69,10 @@ class AudioBlock
 private:
     template <typename OtherSampleType>
     using MayUseConvertingConstructor =
-        std::enable_if_t<std::is_same<std::remove_const_t<SampleType>,
-                                      std::remove_const_t<OtherSampleType>>::value
-                             && std::is_const<SampleType>::value
-                             && ! std::is_const<OtherSampleType>::value,
+        std::enable_if_t<std::is_same_v<std::remove_const_t<SampleType>,
+                                        std::remove_const_t<OtherSampleType>>
+                             && std::is_const_v<SampleType>
+                             && ! std::is_const_v<OtherSampleType>,
                          int>;
 
 public:
@@ -337,7 +335,7 @@ public:
         SIMDRegister then incrementing dstPos by one will increase the sample position
         in the AudioBuffer's units by a factor of SIMDRegister<SampleType>::SIMDNumElements.
     */
-    void copyTo (AudioBuffer<typename std::remove_const<NumericType>::type>& dst, size_t srcPos = 0, size_t dstPos = 0,
+    void copyTo (AudioBuffer<std::remove_const_t<NumericType>>& dst, size_t srcPos = 0, size_t dstPos = 0,
                  size_t numElements = std::numeric_limits<size_t>::max()) const
     {
         auto dstlen = static_cast<size_t> (dst.getNumSamples()) / sizeFactor;
@@ -518,7 +516,7 @@ public:
 
     //==============================================================================
     /** Finds the minimum and maximum value of the buffer. */
-    Range<typename std::remove_const<NumericType>::type> findMinAndMax() const noexcept
+    Range<std::remove_const_t<NumericType>> findMinAndMax() const noexcept
     {
         if (numChannels == 0)
             return {};
@@ -559,11 +557,11 @@ public:
 
     //==============================================================================
     // This class can only be used with floating point types
-    static_assert (std::is_same<std::remove_const_t<SampleType>, float>::value
-                    || std::is_same<std::remove_const_t<SampleType>, double>::value
+    static_assert (std::is_same_v<std::remove_const_t<SampleType>, float>
+                    || std::is_same_v<std::remove_const_t<SampleType>, double>
                   #if JUCE_USE_SIMD
-                    || std::is_same<std::remove_const_t<SampleType>, SIMDRegister<float>>::value
-                    || std::is_same<std::remove_const_t<SampleType>, SIMDRegister<double>>::value
+                    || std::is_same_v<std::remove_const_t<SampleType>, SIMDRegister<float>>
+                    || std::is_same_v<std::remove_const_t<SampleType>, SIMDRegister<double>>
                   #endif
                    , "AudioBlock only supports single or double precision floating point types");
 
@@ -891,5 +889,4 @@ private:
     friend class AudioBlock;
 };
 
-} // namespace dsp
-} // namespace juce
+} // namespace juce::dsp

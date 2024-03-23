@@ -2,15 +2,15 @@
   ==============================================================================
 
    This file is part of the JUCE library.
-   Copyright (c) 2020 - Raw Material Software Limited
+   Copyright (c) 2022 - Raw Material Software Limited
 
    JUCE is an open source library subject to commercial or open-source
    licensing.
 
-   By using JUCE, you agree to the terms of both the JUCE 6 End-User License
-   Agreement and JUCE Privacy Policy (both effective as of the 16th June 2020).
+   By using JUCE, you agree to the terms of both the JUCE 7 End-User License
+   Agreement and JUCE Privacy Policy.
 
-   End User License Agreement: www.juce.com/juce-6-licence
+   End User License Agreement: www.juce.com/juce-7-licence
    Privacy Policy: www.juce.com/juce-privacy-policy
 
    Or: You may also use this code under the terms of the GPL v3 (see
@@ -23,10 +23,9 @@
   ==============================================================================
 */
 
-namespace juce
+namespace juce:: build_tools
 {
-namespace build_tools
-{
+
     String EntitlementOptions::getEntitlementsFileContent() const
     {
         String content =
@@ -49,7 +48,10 @@ namespace build_tools
 
         if (isiOS)
         {
-            if (isAudioPluginProject && shouldEnableIAA)
+            // The Inter-App Audio entitlement is currently deprecated, but it
+            // also "provides access to Audio Unit extensions". Without the
+            // entitlement iOS apps are unable to access AUv3 plug-ins.
+            if ((isAudioPluginProject && shouldEnableIAA) || isAUPluginHost)
                 entitlements.set ("inter-app-audio", "<true/>");
 
             if (isiCloudPermissionsEnabled)
@@ -121,6 +123,17 @@ namespace build_tools
                     paths += "\n\t</array>";
                     entitlements.set (option.key, paths);
                 }
+
+                if (! appSandboxExceptionIOKit.isEmpty())
+                {
+                    String ioKitClasses = "<array>";
+
+                    for (const auto& c : appSandboxExceptionIOKit)
+                        ioKitClasses += "\n\t\t<string>" + c + "</string>";
+
+                    ioKitClasses += "\n\t</array>";
+                    entitlements.set ("com.apple.security.temporary-exception.iokit-user-client-class", ioKitClasses);
+                }
             }
         }
 
@@ -129,5 +142,5 @@ namespace build_tools
 
         return entitlements;
     }
-}
-}
+
+} // namespace juce::build_tools

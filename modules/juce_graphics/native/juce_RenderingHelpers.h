@@ -2,15 +2,15 @@
   ==============================================================================
 
    This file is part of the JUCE library.
-   Copyright (c) 2020 - Raw Material Software Limited
+   Copyright (c) 2022 - Raw Material Software Limited
 
    JUCE is an open source library subject to commercial or open-source
    licensing.
 
-   By using JUCE, you agree to the terms of both the JUCE 6 End-User License
-   Agreement and JUCE Privacy Policy (both effective as of the 16th June 2020).
+   By using JUCE, you agree to the terms of both the JUCE 7 End-User License
+   Agreement and JUCE Privacy Policy.
 
-   End User License Agreement: www.juce.com/juce-6-licence
+   End User License Agreement: www.juce.com/juce-7-licence
    Privacy Policy: www.juce.com/juce-privacy-policy
 
    Or: You may also use this code under the terms of the GPL v3 (see
@@ -23,13 +23,10 @@
   ==============================================================================
 */
 
-namespace juce
+namespace juce::RenderingHelpers
 {
 
 JUCE_BEGIN_IGNORE_WARNINGS_MSVC (4127)
-
-namespace RenderingHelpers
-{
 
 //==============================================================================
 /** Holds either a simple integer translation, or an affine transform.
@@ -86,8 +83,10 @@ public:
 
         complexTransform = getTransformWith (t);
         isOnlyTranslated = false;
-        isRotated = (complexTransform.mat01 != 0.0f || complexTransform.mat10 != 0.0f
-                      || complexTransform.mat00 < 0 || complexTransform.mat11 < 0);
+        isRotated = (! approximatelyEqual (complexTransform.mat01, 0.0f)
+                     || ! approximatelyEqual (complexTransform.mat10, 0.0f)
+                     || complexTransform.mat00 < 0
+                     || complexTransform.mat11 < 0);
     }
 
     float getPhysicalPixelScaleFactor() const noexcept
@@ -2734,8 +2733,6 @@ protected:
     RenderingHelpers::SavedStateStack<SavedStateType> stack;
 };
 
-}
-
 JUCE_END_IGNORE_WARNINGS_MSVC
 
-} // namespace juce
+} // namespace juce::RenderingHelpers

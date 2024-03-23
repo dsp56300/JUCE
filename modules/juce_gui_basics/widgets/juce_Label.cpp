@@ -2,15 +2,15 @@
   ==============================================================================
 
    This file is part of the JUCE library.
-   Copyright (c) 2020 - Raw Material Software Limited
+   Copyright (c) 2022 - Raw Material Software Limited
 
    JUCE is an open source library subject to commercial or open-source
    licensing.
 
-   By using JUCE, you agree to the terms of both the JUCE 6 End-User License
-   Agreement and JUCE Privacy Policy (both effective as of the 16th June 2020).
+   By using JUCE, you agree to the terms of both the JUCE 7 End-User License
+   Agreement and JUCE Privacy Policy.
 
-   End User License Agreement: www.juce.com/juce-6-licence
+   End User License Agreement: www.juce.com/juce-7-licence
    Privacy Policy: www.juce.com/juce-privacy-policy
 
    Or: You may also use this code under the terms of the GPL v3 (see
@@ -202,23 +202,18 @@ void Label::editorShown (TextEditor* textEditor)
     if (checker.shouldBailOut())
         return;
 
-    if (onEditorShow != nullptr)
-        onEditorShow();
+    NullCheckedInvocation::invoke (onEditorShow);
 }
 
 void Label::editorAboutToBeHidden (TextEditor* textEditor)
 {
-    if (auto* peer = getPeer())
-        peer->dismissPendingTextInput();
-
     Component::BailOutChecker checker (this);
     listeners.callChecked (checker, [this, textEditor] (Label::Listener& l) { l.editorHidden (this, *textEditor); });
 
     if (checker.shouldBailOut())
         return;
 
-    if (onEditorHide != nullptr)
-        onEditorHide();
+    NullCheckedInvocation::invoke (onEditorHide);
 }
 
 void Label::showEditor()
@@ -392,7 +387,7 @@ void Label::colourChanged()
 
 void Label::setMinimumHorizontalScale (const float newScale)
 {
-    if (minimumHorizontalScale != newScale)
+    if (! approximatelyEqual (minimumHorizontalScale, newScale))
     {
         minimumHorizontalScale = newScale;
         repaint();
@@ -402,7 +397,7 @@ void Label::setMinimumHorizontalScale (const float newScale)
 //==============================================================================
 // We'll use a custom focus traverser here to make sure focus goes from the
 // text editor to another component rather than back to the label itself.
-class LabelKeyboardFocusTraverser   : public KeyboardFocusTraverser
+class LabelKeyboardFocusTraverser final : public KeyboardFocusTraverser
 {
 public:
     explicit LabelKeyboardFocusTraverser (Label& l)  : owner (l)  {}
@@ -466,8 +461,7 @@ void Label::callChangeListeners()
     if (checker.shouldBailOut())
         return;
 
-    if (onTextChange != nullptr)
-        onTextChange();
+    NullCheckedInvocation::invoke (onTextChange);
 }
 
 //==============================================================================
@@ -507,11 +501,11 @@ void Label::textEditorReturnKeyPressed (TextEditor& ed)
     }
 }
 
-void Label::textEditorEscapeKeyPressed (TextEditor& ed)
+void Label::textEditorEscapeKeyPressed ([[maybe_unused]] TextEditor& ed)
 {
     if (editor != nullptr)
     {
-        jassertquiet (&ed == editor.get());
+        jassert (&ed == editor.get());
 
         editor->setText (textValue.toString(), false);
         hideEditor (true);
@@ -524,7 +518,7 @@ void Label::textEditorFocusLost (TextEditor& ed)
 }
 
 //==============================================================================
-class LabelAccessibilityHandler  : public AccessibilityHandler
+class LabelAccessibilityHandler final : public AccessibilityHandler
 {
 public:
     explicit LabelAccessibilityHandler (Label& labelToWrap)
@@ -548,7 +542,7 @@ public:
     }
 
 private:
-    class LabelValueInterface  : public AccessibilityTextValueInterface
+    class LabelValueInterface final : public AccessibilityTextValueInterface
     {
     public:
         explicit LabelValueInterface (Label& labelToWrap)

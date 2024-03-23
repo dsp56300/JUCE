@@ -2,7 +2,7 @@
   ==============================================================================
 
    This file is part of the JUCE library.
-   Copyright (c) 2020 - Raw Material Software Limited
+   Copyright (c) 2022 - Raw Material Software Limited
 
    JUCE is an open source library subject to commercial or open-source
    licensing.
@@ -185,7 +185,7 @@ String BufferedInputStream::readString()
 //==============================================================================
 #if JUCE_UNIT_TESTS
 
-struct BufferedInputStreamTests   : public UnitTest
+struct BufferedInputStreamTests final : public UnitTest
 {
     template <typename Fn, size_t... Ix, typename Values>
     static void applyImpl (Fn&& fn, std::index_sequence<Ix...>, Values&& values)
