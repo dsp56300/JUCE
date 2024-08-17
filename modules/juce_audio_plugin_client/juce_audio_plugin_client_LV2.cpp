@@ -1084,8 +1084,12 @@ private:
                 {
                     const auto value = jmap ((float) counter, 0.0f, (float) numSteps - 1.0f, min, max);
 
+					const auto label = string.
+                		replace("\\", "\\\\").
+                		replace("\"", "\\\"");
+
                     os << (counter != 0 ? ", " : "") << "[\n"
-                          "\t\trdfs:label \"" << string << "\" ;\n"
+                          "\t\trdfs:label \"" << label << "\" ;\n"
                           "\t\trdf:value " << value << " ;\n"
                           "\t]";
                 }
