@@ -1351,6 +1351,12 @@ public:
         {
             if (details.programChanged)
             {
+                // We always set kParamValuesChanged because:
+                // For VST2, CLAP, AU, this works as intended but not for VST3. We want to inform the host that
+                // a bunch of parameters have changed. However, this code below checks if the parameter for the current program
+                // has changed. This fails for all plugins that have an own patch management system and just one "program"
+                flags |= Vst::kParamValuesChanged;
+
                 const auto programParameterId = audioProcessor->getProgramParamID();
 
                 if (audioProcessor->getParamForVSTParamID (programParameterId) != nullptr)
