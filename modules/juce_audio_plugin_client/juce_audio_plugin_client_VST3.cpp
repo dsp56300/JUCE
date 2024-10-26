@@ -893,6 +893,13 @@ public:
         Vst::ParamValue toPlain (Vst::ParamValue v) const override       { return v; }
         Vst::ParamValue toNormalized (Vst::ParamValue v) const override  { return v; }
 
+        void updateParameterValue()
+        {
+            // retrieve the current value from Juce::AudioProcessorParameter and update
+            // the value stored in Vst::Parameter to ensure its up-to-date
+            setNormalized(param.getValue());
+        }
+
     private:
         JuceVST3EditController& owner;
         AudioProcessorParameter& param;
@@ -1029,6 +1036,18 @@ public:
         return kResultOk;
     }
    #endif
+
+    Vst::ParamValue getParamNormalized(Vst::ParamID id) override
+    {
+        // cached parameter value might be outdated, update it before returning
+        if (auto* parameter = getParameterObject (id))
+        {
+            if(auto* juceParam = dynamic_cast<Param*>(parameter))
+                juceParam->updateParameterValue();
+            return parameter->getNormalized();
+        }
+        return EditController::getParamNormalized(id);
+    }
 
     //==============================================================================
     tresult PLUGIN_API setComponentState (IBStream* stream) override
