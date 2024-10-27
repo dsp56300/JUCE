@@ -1889,7 +1889,10 @@ function(_juce_initialise_target target)
         AAX_COPY_DIR
         AU_COPY_DIR
         UNITY_COPY_DIR
-        COPY_PLUGIN_AFTER_BUILD)
+        COPY_PLUGIN_AFTER_BUILD
+
+        BASE_FOLDER
+        PRODUCTS_FOLDER)
 
     set(multi_value_args
         FORMATS
@@ -1912,8 +1915,18 @@ function(_juce_initialise_target target)
 
     cmake_parse_arguments(JUCE_ARG "" "${one_value_args}" "${multi_value_args}" ${ARGN})
 
-    set(base_folder "${CMAKE_CURRENT_BINARY_DIR}/${target}_artefacts")
-    set(products_folder "${base_folder}/$<CONFIG>")
+    if(JUCE_ARG_BASE_FOLDER)
+        set(base_folder "${JUCE_ARG_BASE_FOLDER}")
+    else()
+        set(base_folder "${CMAKE_CURRENT_BINARY_DIR}/${target}_artefacts")
+    endif()
+
+    if(JUCE_ARG_PRODUCTS_FOLDER)
+        set(products_folder "${JUCE_ARG_PRODUCTS_FOLDER}")
+    else()
+        set(products_folder "${base_folder}/$<CONFIG>")
+    endif()
+
     set(juce_library_code "${base_folder}/JuceLibraryCode")
 
     set_target_properties(${target} PROPERTIES JUCE_GENERATED_SOURCES_DIRECTORY "${juce_library_code}")
