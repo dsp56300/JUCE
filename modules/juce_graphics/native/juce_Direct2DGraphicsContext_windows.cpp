@@ -1666,6 +1666,11 @@ void Direct2DGraphicsContext::drawGlyphs (Span<const uint16_t> glyphNumbers,
     if (! deviceContext)
         return;
 
+    if (currentState->interpolationMode == D2D1_INTERPOLATION_MODE_NEAREST_NEIGHBOR)
+        deviceContext->SetTextAntialiasMode(D2D1_TEXT_ANTIALIAS_MODE_ALIASED);
+    else
+        deviceContext->SetTextAntialiasMode(D2D1_TEXT_ANTIALIAS_MODE_DEFAULT);
+
     const auto typeface = font.getTypefacePtr();
     const auto fontFace = [&]() -> ComSmartPtr<IDWriteFontFace>
     {
