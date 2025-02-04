@@ -355,7 +355,12 @@ void AudioProcessor::setPlayConfigDetails (int newNumIns, int newNumOuts, double
     jassert (success);
 
     // if the user is using this method then they do not want any side-buses or aux outputs
-    success &= disableNonMainBuses();
+    /*success &= */disableNonMainBuses();
+
+	// [DSP56300] Why though? If the number of used buses/channels match the number of ins/outs why disable some
+	// buses afterwards?
+	// We removed the success flag modification because if we're not wrong this fails for all multichannel
+	// plugins that are used in an AudioProcessorPlayer (which calls this func), it makes debugging impossible
     jassert (success);
 
     // the processor may not support this arrangement at all
