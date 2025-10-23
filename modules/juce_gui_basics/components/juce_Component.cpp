@@ -2386,6 +2386,10 @@ void Component::internalMagnifyGesture (MouseInputSource source, Point<float> re
 
 void Component::sendFakeMouseMove() const
 {
+	// [DSP56300] removed, this is sent when resizing the plugin window, with a "valid" mouse position
+	// even if the mouse is outside, obviously, because the mouse is resizing the window!
+	return;
+
     if (flags.ignoresMouseClicksFlag && ! flags.allowChildMouseClicksFlag)
         return;
 
