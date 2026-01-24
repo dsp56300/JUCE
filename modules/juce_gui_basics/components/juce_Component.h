@@ -1001,7 +1001,7 @@ public:
                     instead call getComponentAt on the top-level parent of this component.
         @see hitTest, contains, reallyContains
     */
-    Component* getComponentAt (Point<float> position);
+    virtual Component* getComponentAt (Point<float> position);
 
     //==============================================================================
     /** Marks the whole component as needing to be redrawn.
