@@ -3526,7 +3526,21 @@ void XWindowSystem::handleKeyPressEvent (LinuxComponentPeer* peer, XKeyEvent& ke
         peer->handleKeyUpOrDown (true);
 
     if (keyPressed)
-        peer->handleKeyPress (keyCode, unicodeChar);
+    {
+        if (! peer->handleKeyPress (keyCode, unicodeChar))
+        {
+            // Key was not consumed by any JUCE component. If this is an embedded
+            // plugin window, forward the event to the parent (host) window so the
+            // DAW can handle it (e.g. for computer keyboard MIDI input).
+            if (auto parentWindow = peer->getParentWindow())
+            {
+                XEvent ev;
+                ev.xkey = keyEvent;
+                ev.xkey.window = parentWindow;
+                X11Symbols::getInstance()->xSendEvent (display, parentWindow, True, KeyPressMask, &ev);
+            }
+        }
+    }
 }
 
 void XWindowSystem::handleKeyReleaseEvent (LinuxComponentPeer* peer, const XKeyEvent& keyEvent) const
@@ -3564,7 +3578,20 @@ void XWindowSystem::handleKeyReleaseEvent (LinuxComponentPeer* peer, const XKeyE
             peer->handleModifierKeysChange();
 
         if (keyDownChange)
-            peer->handleKeyUpOrDown (false);
+        {
+            if (! peer->handleKeyUpOrDown (false))
+            {
+                // Key release was not consumed. Forward to the parent (host)
+                // window so the DAW can process it.
+                if (auto parentWindow = peer->getParentWindow())
+                {
+                    XEvent ev;
+                    ev.xkey = keyEvent;
+                    ev.xkey.window = parentWindow;
+                    X11Symbols::getInstance()->xSendEvent (display, parentWindow, True, KeyReleaseMask, &ev);
+                }
+            }
+        }
     }
 }
 
