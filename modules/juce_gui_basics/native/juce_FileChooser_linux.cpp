@@ -171,14 +171,11 @@ private:
             separator = "\n";
             args.add ("--multiple");
             args.add ("--separate-output");
-            args.add ("--getopenfilename");
         }
-        else
-        {
-            if (isSave)             args.add ("--getsavefilename");
-            else if (isDirectory)   args.add ("--getexistingdirectory");
-            else                    args.add ("--getopenfilename");
-        }
+
+        if (isSave)             args.add ("--getsavefilename");
+        else if (isDirectory)   args.add ("--getexistingdirectory");
+        else                    args.add ("--getopenfilename");
 
         File startPath;
 
