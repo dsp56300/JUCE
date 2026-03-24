@@ -1109,6 +1109,11 @@ public:
                                                     [[maybe_unused]] Vst::ParamID& resultID) override
     {
        #if JUCE_VST3_EMULATE_MIDI_CC_WITH_PARAMETERS
+        if (midiControllerNumber == Vst::kCtrlProgramChange)
+        {
+            resultID = static_cast<Vst::ParamID> (numMidiCCParams + channel) + parameterToMidiControllerOffset;
+            return kResultTrue;
+        }
         resultID = midiControllerToParameter[channel][midiControllerNumber];
         return kResultTrue; // Returning false makes some hosts stop asking for further MIDI Controller Assignments
        #else
@@ -1448,7 +1453,8 @@ private:
 
     enum { numMIDIChannels = 16 };
     Vst::ParamID parameterToMidiControllerOffset;
-    MidiController parameterToMidiController[(int) numMIDIChannels * (int) Vst::kCountCtrlNumber];
+    enum { numMidiCCParams = (int) numMIDIChannels * (int) Vst::kCountCtrlNumber };
+    MidiController parameterToMidiController[(int) numMidiCCParams + (int) numMIDIChannels];
     Vst::ParamID midiControllerToParameter[numMIDIChannels][Vst::kCountCtrlNumber];
 
     void restartComponentOnMessageThread (int32 flags) override
@@ -1625,6 +1631,18 @@ private:
                                          static_cast<Vst::ParamID> (p) + parameterToMidiControllerOffset, nullptr, 0, 0,
                                          0, Vst::kRootUnitId));
             }
+        }
+
+        // Program change parameters (one per MIDI channel, appended after all CC parameters)
+        for (int c = 0; c < numMIDIChannels; ++c)
+        {
+            const auto p = numMidiCCParams + c;
+            parameterToMidiController[p].channel = c;
+            parameterToMidiController[p].ctrlNumber = Vst::kCtrlProgramChange;
+
+            parameters.addParameter (new Vst::Parameter (toString ("MIDI PC " + String (c)),
+                                     static_cast<Vst::ParamID> (p) + parameterToMidiControllerOffset, nullptr, 0, 0,
+                                     0, Vst::kRootUnitId));
         }
     }
 
@@ -3594,6 +3612,9 @@ public:
             else if (ctrlNumber == Vst::kPitchBend)
                 midiBuffer.addEvent (MidiMessage::pitchWheel (channel,
                                                               jlimit (0, 0x3fff, (int) (value * 0x4000))), offsetSamples);
+            else if (ctrlNumber == Vst::kCtrlProgramChange)
+                midiBuffer.addEvent (MidiMessage::programChange (channel,
+                                                                  jlimit (0, 127, (int) (value * 128.0))), offsetSamples);
             else
                 midiBuffer.addEvent (MidiMessage::controllerEvent (channel,
                                                                    jlimit (0, 127, ctrlNumber),
