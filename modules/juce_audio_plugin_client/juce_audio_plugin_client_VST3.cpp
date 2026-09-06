@@ -1997,17 +1997,22 @@ private:
 
                         if (! approximatelyEqual (aspectRatio, 0.0f))
                         {
+                            // Deciding this from the proposed ratio alone always corrects the larger of
+                            // the two dimensions, so the result can only ever be smaller than what the
+                            // host asked for. Dragging a single edge proposes a change in one dimension
+                            // only, and that is precisely the dimension that gets discarded: dragging an
+                            // edge outwards does nothing, dragging it inwards shrinks the editor, and
+                            // once the minimum is reached it cannot be made bigger again. Preferring the
+                            // dimension that actually changed avoids this. Dragging a corner changes both
+                            // dimensions and still falls back to the ratio.
+                            auto currentEditorBounds = editor->getBounds().toFloat();
+
                             bool adjustWidth = (width / height > aspectRatio);
 
-                            if (detail::PluginUtilities::getHostType().type == PluginHostType::SteinbergCubase9)
-                            {
-                                auto currentEditorBounds = editor->getBounds().toFloat();
-
-                                if (approximatelyEqual (currentEditorBounds.getWidth(), width) && ! approximatelyEqual (currentEditorBounds.getHeight(), height))
-                                    adjustWidth = true;
-                                else if (approximatelyEqual (currentEditorBounds.getHeight(), height) && ! approximatelyEqual (currentEditorBounds.getWidth(), width))
-                                    adjustWidth = false;
-                            }
+                            if (approximatelyEqual (currentEditorBounds.getWidth(), width) && ! approximatelyEqual (currentEditorBounds.getHeight(), height))
+                                adjustWidth = true;
+                            else if (approximatelyEqual (currentEditorBounds.getHeight(), height) && ! approximatelyEqual (currentEditorBounds.getWidth(), width))
+                                adjustWidth = false;
 
                             if (adjustWidth)
                             {
