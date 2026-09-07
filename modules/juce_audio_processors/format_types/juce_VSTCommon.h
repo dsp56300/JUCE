@@ -216,8 +216,15 @@ struct SpeakerMappings  : private AudioChannelSet // (inheritance only to give e
 
         Vst2::VstSpeakerArrangement* allocate (int numChannels)
         {
-            auto arrangementSize = (size_t) (jmax (8, numChannels) - 8) * sizeof (Vst2::VstSpeakerProperties)
-                                    + sizeof (Vst2::VstSpeakerArrangement);
+            // Steinberg's SDK declares eight inline speakers, while the bundled
+            // FST-compatible ABI uses a flexible speakers[] member. Computing
+            // from the member offset supports both definitions; the old
+            // sizeof + (channels - 8) formula allocated only the eight-byte
+            // header with FST and the first speaker write overflowed it.
+            const auto speakerCount = static_cast<size_t> (jmax (8, numChannels));
+            const auto arrangementSize = jmax (sizeof (Vst2::VstSpeakerArrangement),
+                                               offsetof (Vst2::VstSpeakerArrangement, speakers)
+                                                   + speakerCount * sizeof (Vst2::VstSpeakerProperties));
 
             storage.malloc (1, arrangementSize);
             return storage.get();
