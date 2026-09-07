@@ -29,6 +29,8 @@
  #include <juce_audio_plugin_client/detail/juce_CreatePluginFilter.h>
 #endif
 
+#include <juce_audio_plugin_client/Standalone/juce_StandaloneOptionsMenuHandler.h>
+
 namespace juce
 {
 
@@ -884,6 +886,15 @@ private:
 
     void buttonClicked (Button*) override
     {
+        if (auto* editor = getAudioProcessor()->getActiveEditor())
+        {
+            if (auto* handler = dynamic_cast<StandaloneOptionsMenuHandler*> (editor))
+            {
+                handler->showStandaloneOptionsMenu();
+                return;
+            }
+        }
+
         PopupMenu m;
         m.addItem (1, TRANS ("Audio/MIDI Settings..."));
         m.addSeparator();
