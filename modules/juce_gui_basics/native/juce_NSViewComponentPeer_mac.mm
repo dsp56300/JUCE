@@ -2030,6 +2030,27 @@ private:
         NSWindowStyleMask stored;
     };
 
+    /*  Popup menus, callout boxes and other temporary windows are modal only until the next
+        click elsewhere, so unlike a dialog they don't lock the windows behind them. Treating
+        them like one hid every title bar button of a window without minimise or maximise
+        buttons for as long as a menu was open.
+    */
+    static bool isNonTemporaryComponentModal()
+    {
+        auto& manager = *ModalComponentManager::getInstance();
+
+        for (int i = 0; i < manager.getNumModalComponents(); ++i)
+        {
+            auto* modal = manager.getModalComponent (i);
+            auto* peer = modal != nullptr ? modal->getPeer() : nullptr;
+
+            if (peer == nullptr || (peer->getStyleFlags() & ComponentPeer::windowIsTemporary) == 0)
+                return true;
+        }
+
+        return false;
+    }
+
     void modalComponentManagerChanged()
     {
         // We are only changing the style flags if we absolutely have to. Plugin windows generally
@@ -2043,7 +2064,7 @@ private:
         {
             const auto currentStyleMask = [window styleMask];
 
-            if (ModalComponentManager::getInstance()->getNumModalComponents() > 0)
+            if (isNonTemporaryComponentModal())
             {
                 if (! storedFlags)
                     storedFlags.emplace (currentStyleMask);
