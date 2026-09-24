@@ -819,6 +819,11 @@ function(_juce_create_windows_package source_target dest_target extension defaul
     set(is_x64 $<EQUAL:${CMAKE_SIZEOF_VOID_P},8>)
     set(arch_string $<IF:${is_x64},${x64folder},${x32folder}>)
 
+    # optional seventh argument: the folder of an ARM64 build, hosts do not look for one in the x64 folder
+    if(ARGC GREATER 6 AND CMAKE_CXX_COMPILER_ARCHITECTURE_ID STREQUAL "ARM64")
+        set(arch_string ${ARGV6})
+    endif()
+
     set_target_properties(${dest_target}
         PROPERTIES
         PDB_OUTPUT_DIRECTORY "${products_folder}"
@@ -1101,7 +1106,7 @@ function(_juce_set_plugin_target_properties shared_code_target kind)
             XCODE_ATTRIBUTE_LIBRARY_STYLE Bundle
             XCODE_ATTRIBUTE_GENERATE_PKGINFO_FILE YES)
 
-        _juce_create_windows_package(${shared_code_target} ${target_name} vst3 "" x86-win x86_64-win)
+        _juce_create_windows_package(${shared_code_target} ${target_name} vst3 "" x86-win x86_64-win arm64-win)
 
         set(output_path "${products_folder}/${product_name}.vst3")
 
