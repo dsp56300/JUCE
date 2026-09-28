@@ -762,17 +762,21 @@ function(_juce_add_resources_rc source_target dest_target)
         get_target_property(input_info_file ${source_target} JUCE_INFO_FILE)
 
         get_target_property(generated_icon ${source_target} JUCE_ICON_FILE)
-        set(dependency)
+
+        # The info file is what the resource is made of, so it has to be a dependency of it.
+        # Without it the .rc is generated once and never again, and a build tree that is not
+        # wiped goes on stamping the version that was current when it was created.
+        set(dependencies "${input_info_file}")
 
         if(generated_icon)
-            set(dependency DEPENDS "${generated_icon}")
+            list(APPEND dependencies "${generated_icon}")
         endif()
 
         set(resource_rc_file "${juce_library_code}/${source_target}_resources.rc")
 
         add_custom_command(OUTPUT "${resource_rc_file}"
             COMMAND juce::juceaide rcfile "${input_info_file}" "${resource_rc_file}"
-            ${dependency}
+            DEPENDS ${dependencies}
             VERBATIM)
 
         add_library(${source_target}_rc_lib OBJECT ${resource_rc_file})
