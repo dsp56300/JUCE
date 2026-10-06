@@ -522,6 +522,11 @@ static void updateKeyStates (int keycode, bool press) noexcept
         Keys::keyStates [keybyte] &= ~keybit;
 }
 
+static bool isKeyStateDown (int keycode) noexcept
+{
+    return (Keys::keyStates [keycode >> 3] & (1 << (keycode & 7))) != 0;
+}
+
 static void updateKeyModifiers (int status) noexcept
 {
     int keyMods = 0;
@@ -3417,10 +3422,14 @@ void XWindowSystem::handleKeyPressEvent (LinuxComponentPeer* peer, XKeyEvent& ke
     juce_wchar unicodeChar = 0;
     int keyCode = 0;
     bool keyDownChange = false;
+    bool isAutoRepeat = false;
     KeySym sym;
 
     {
         XWindowSystemUtilities::ScopedXLock xLock;
+
+        // A key that is still down repeats: handleKeyReleaseEvent skips the release X11 sends before each repeat
+        isAutoRepeat = isKeyStateDown ((int) keyEvent.keycode);
         updateKeyStates ((int) keyEvent.keycode, true);
 
         String oldLocale (::setlocale (LC_ALL, nullptr));
@@ -3527,11 +3536,13 @@ void XWindowSystem::handleKeyPressEvent (LinuxComponentPeer* peer, XKeyEvent& ke
 
     if (keyPressed)
     {
-        if (! peer->handleKeyPress (keyCode, unicodeChar))
+        if (! peer->handleKeyPress (keyCode, unicodeChar) && ! isAutoRepeat)
         {
             // Key was not consumed by any JUCE component. If this is an embedded
             // plugin window, forward the event to the parent (host) window so the
-            // DAW can handle it (e.g. for computer keyboard MIDI input).
+            // DAW can handle it (e.g. for computer keyboard MIDI input). Auto-repeats
+            // are not forwarded: the host would take each one for a new key press,
+            // and its computer keyboard MIDI input would play the note again.
             if (auto parentWindow = peer->getParentWindow())
             {
                 XEvent ev;
