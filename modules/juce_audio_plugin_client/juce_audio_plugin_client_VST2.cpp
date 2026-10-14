@@ -338,6 +338,9 @@ public:
     void internalProcessReplacing (FloatType** inputs, FloatType** outputs,
                                    int32 numSamples, VstTempBuffers<FloatType>& tmpBuffers)
     {
+        // Some hosts suspend/resume from their UI thread while an audio callback is
+        // still running. Protect the wrapper-owned buffers as well as the processor.
+        const ScopedLock callbackLock (processor->getCallbackLock());
         const bool isMidiEffect = processor->isMidiEffect();
 
         if (firstProcessCallback)
@@ -373,9 +376,7 @@ public:
             const int numIn  = processor->getTotalNumInputChannels();
             const int numOut = processor->getTotalNumOutputChannels();
 
-            const ScopedLock sl (processor->getCallbackLock());
-
-            if (processor->isSuspended())
+            if (! isProcessing || processor->isSuspended())
             {
                 for (int i = 0; i < numOut; ++i)
                     if (outputs[i] != nullptr)
@@ -516,28 +517,36 @@ public:
     {
         if (processor != nullptr)
         {
-            isProcessing = true;
+            const auto offline = isProcessLevelOffline();
+            {
+                const ScopedLock callbackLock (processor->getCallbackLock());
+                isProcessing = true;
 
-            auto numInAndOutChannels = static_cast<size_t> (vstEffect.numInputs + vstEffect.numOutputs);
-            floatTempBuffers .channels.calloc (numInAndOutChannels);
-            doubleTempBuffers.channels.calloc (numInAndOutChannels);
+                auto numInAndOutChannels = static_cast<size_t> (vstEffect.numInputs + vstEffect.numOutputs);
+                floatTempBuffers .channels.calloc (numInAndOutChannels);
+                doubleTempBuffers.channels.calloc (numInAndOutChannels);
 
-            auto currentRate = sampleRate;
-            auto currentBlockSize = blockSize;
+                auto currentRate = sampleRate;
+                auto currentBlockSize = blockSize;
 
-            firstProcessCallback = true;
+                firstProcessCallback = true;
 
-            processor->setNonRealtime (isProcessLevelOffline());
-            processor->setRateAndBufferSizeDetails (currentRate, currentBlockSize);
+                processor->setNonRealtime (offline);
+                processor->setRateAndBufferSizeDetails (currentRate, currentBlockSize);
 
-            deleteTempChannels();
+                deleteTempChannels();
 
-            processor->prepareToPlay (currentRate, currentBlockSize);
+                processor->prepareToPlay (currentRate, currentBlockSize);
 
-            midiEvents.ensureSize (2048);
-            midiEvents.clear();
+                midiEvents.ensureSize (2048);
+                midiEvents.clear();
 
-            vstEffect.initialDelay = processor->getLatencySamples();
+                vstEffect.initialDelay = processor->getLatencySamples();
+
+           #if JucePlugin_ProducesMidiOutput || JucePlugin_IsMidiEffect
+                outgoingEvents.ensureSize (512);
+           #endif
+            }
 
             /** If this plug-in is a synth or it can receive midi events we need to tell the
                 host that we want midi. In the SDK this method is marked as deprecated, but
@@ -560,9 +569,6 @@ public:
                 hostCallback (&vstEffect, Vst2::audioMasterVendorSpecific, 0, 0, &hostCmd, 0.0f);
             }
 
-           #if JucePlugin_ProducesMidiOutput || JucePlugin_IsMidiEffect
-            outgoingEvents.ensureSize (512);
-           #endif
         }
     }
 
@@ -570,6 +576,7 @@ public:
     {
         if (processor != nullptr)
         {
+            const ScopedLock callbackLock (processor->getCallbackLock());
             processor->releaseResources();
             outgoingEvents.freeEvents();
 
