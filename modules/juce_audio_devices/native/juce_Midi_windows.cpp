@@ -456,9 +456,23 @@ private:
 
             const ScopedLock sl (parentService.activeCollectorLock);
 
-            for (auto& c : parentService.activeCollectors)
-                if (c->deviceInfo.identifier == deviceIdentifier)
-                    return c;
+            for (int i = parentService.activeCollectors.size(); --i >= 0;)
+            {
+                auto* c = parentService.activeCollectors.getObjectPointer (i);
+
+                if (c->deviceInfo.identifier != deviceIdentifier)
+                    continue;
+
+                // One that all its inputs closed only waits for its removal. Its device may have gone and come back
+                // meanwhile, a USB device plugged in again, and its handle gets nothing anymore: open the device anew
+                if (c->getReferenceCount() == 1)
+                {
+                    parentService.activeCollectors.remove (i);
+                    break;
+                }
+
+                return c;
+            }
 
             MidiInCollector::Ptr c (new MidiInCollector (parentService, { deviceName, deviceIdentifier }));
 
