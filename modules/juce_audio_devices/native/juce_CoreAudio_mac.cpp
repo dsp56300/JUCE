@@ -1321,6 +1321,10 @@ public:
     {
         restartDevice = false;
         stopAndGetLastCallback();
+
+        // restart() keeps the callback it stopped. One its owner stopped must not come back.
+        const ScopedLock sl (closeLock);
+        previousCallback = nullptr;
     }
 
     AudioIODeviceCallback* stopAndGetLastCallback() const
@@ -1371,7 +1375,14 @@ public:
 
         {
             const ScopedLock sl (closeLock);
-            previousCallback = stopInternal();
+
+            // A rate change asks for a restart more than once before the timer fires: the HAL
+            // reports kAudioDevicePropertyDeviceHasChanged, and CoreAudioInternal's timer sees
+            // the new rate. Only the first of them still has the callback to stop, so a later
+            // one must not replace it with nullptr, or the device restarts with no callback
+            // and stays silent.
+            if (auto* lastCallback = stopInternal())
+                previousCallback = lastCallback;
         }
 
         startTimer (100);
